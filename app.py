@@ -3,7 +3,7 @@ import pandas as pd
 import unicodedata
 
 # =================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # =================================================
 st.set_page_config(
     page_title="Data Core | Inteligencia Agroexportadora",
@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # =================================================
-# LOGIN SIMPLE (MVP)
+# LOGIN
 # =================================================
 def login():
     st.title("🔐 Acceso a Data Core")
@@ -29,23 +29,7 @@ if "auth" not in st.session_state:
     st.stop()
 
 # =================================================
-# APP PRINCIPAL
-# =================================================
-st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
-st.write("MVP funcional – análisis de certificaciones y simulación de riesgo")
-
-# =================================================
-# CARGA DE DATOS
-# =================================================
-data = pd.read_csv(
-    "datos_reales.csv",
-    sep=";",
-    encoding="latin1",
-    on_bad_lines="skip"
-)
-
-# =================================================
-# NORMALIZAR ENCABEZADOS
+# NORMALIZADOR
 # =================================================
 def normalizar(texto):
     texto = str(texto).strip().lower()
@@ -54,38 +38,53 @@ def normalizar(texto):
     texto = texto.replace(" ", "_")
     return texto
 
-data.columns = [normalizar(c) for c in data.columns]
+# =================================================
+# CARGA MULTIARCHIVO (ESCALABLE)
+# =================================================
+@st.cache_data
+def cargar_datos():
+    archivos = {
+        "limon": "datos_reales.csv",
+        "arandano": "data_arandano_1_6.csv"
+    }
+
+    dfs = []
+
+    for producto, archivo in archivos.items():
+        df = pd.read_csv(
+            archivo,
+            sep=";",
+            encoding="latin1",
+            on_bad_lines="skip"
+        )
+        df.columns = [normalizar(c) for c in df.columns]
+        df["producto"] = producto
+        dfs.append(df)
+
+    return pd.concat(dfs, ignore_index=True)
+
+data = cargar_datos()
 
 # =================================================
-# DETECTAR COLUMNA PRODUCTO (AUTOMÁTICO)
+# APP PRINCIPAL
 # =================================================
-col_producto = None
-for c in data.columns:
-    if "producto" in c:
-        col_producto = c
-        break
-
-if col_producto is None:
-    st.error("No se pudo identificar la columna de producto.")
-    st.write("Columnas detectadas:", list(data.columns))
-    st.stop()
-
-data["producto"] = data[col_producto].astype(str).str.strip().str.lower()
+st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
+st.write("MVP funcional – análisis de certificaciones y simulación de riesgo")
 
 # =================================================
 # FILTROS
 # =================================================
 st.sidebar.header("🔍 Filtros")
 
-producto = st.sidebar.selectbox(
+producto_sel = st.sidebar.selectbox(
     "Producto",
     sorted(data["producto"].unique())
 )
 
-df = data[data["producto"] == producto]
+df = data[data["producto"] == producto_sel]
 
 # =================================================
-# PARÁMETROS MANUALES (TÚ DECIDES)
+# PARÁMETROS MANUALES
 # =================================================
 st.sidebar.header("⚙️ Parámetros del modelo")
 
@@ -97,7 +96,7 @@ rechazo_manual = st.sidebar.slider(
 )
 
 # =================================================
-# SCORING DE RIESGO
+# SCORING
 # =================================================
 def calcular_score(row, rechazo):
     score = 100
@@ -139,22 +138,15 @@ c2.metric("Rechazo simulado (%)", rechazo_manual)
 c3.metric("Score promedio", round(df["score_riesgo"].mean(), 1))
 
 # =================================================
-# TABLA COMPLETA
+# TABLA
 # =================================================
-st.subheader("📋 Base de datos completa")
-
-st.dataframe(
-    df,
-    use_container_width=True,
-    height=500
-)
+st.subheader("📋 Información del producto seleccionado")
+st.dataframe(df, use_container_width=True, height=500)
 
 # =================================================
 # MENSAJE FINAL
 # =================================================
 st.info(
-    "Data Core integra información real de certificaciones fitosanitarias, "
-    "permitiendo simular escenarios de rechazo y apoyar la toma de decisiones "
-    "en procesos de exportación agroalimentaria."
+    f"Análisis correspondiente al producto: {producto_sel.upper()} | "
+    "Datos reales integrados para simulación de riesgo y apoyo a decisiones."
 )
-
