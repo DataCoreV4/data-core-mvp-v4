@@ -40,8 +40,7 @@ def normalizar(texto):
     texto = str(texto).strip().lower()
     texto = unicodedata.normalize("NFKD", texto)
     texto = texto.encode("ascii", "ignore").decode("utf-8")
-    texto = texto.replace(" ", "_")
-    texto = texto.replace(".", "")
+    texto = texto.replace(" ", "_").replace(".", "")
     return texto
 
 def detectar_columna(df, claves):
@@ -115,11 +114,8 @@ campo = cargar_campo()
 # INTERFAZ
 # =================================================
 st.title("🌱 Data Core – Inteligencia Agroexportadora")
-st.write("Uso real de campos certificados según envíos registrados")
+st.write("Vinculación de envíos con campos certificados (uso real)")
 
-# =================================================
-# FILTRO PRODUCTO
-# =================================================
 producto_sel = st.sidebar.selectbox(
     "Producto",
     sorted(envios["producto"].unique())
@@ -129,17 +125,37 @@ envios_p = envios[envios["producto"] == producto_sel]
 campo_p = campo[campo["producto"] == producto_sel]
 
 # =================================================
-# DETECTAR COLUMNAS CLAVE
+# MOSTRAR COLUMNAS (DEBUG CONTROLADO)
 # =================================================
-col_cod_envio = detectar_columna(envios_p, ["cod_lugar_de_produccion"])
-col_cod_campo = detectar_columna(campo_p, ["cod_lugar_prod"])
-col_mes = detectar_columna(envios_p, ["mes_inspeccion"])
+with st.expander("🧩 Ver columnas detectadas (diagnóstico)"):
+    st.write("📦 Envíos:")
+    st.write(list(envios_p.columns))
+    st.write("🌾 Campo:")
+    st.write(list(campo_p.columns))
+
+# =================================================
+# DETECCIÓN FLEXIBLE
+# =================================================
+col_cod_envio = detectar_columna(
+    envios_p,
+    ["cod_lugar", "codigo_lugar", "lugar_produccion"]
+)
+
+col_cod_campo = detectar_columna(
+    campo_p,
+    ["cod_lugar", "codigo_lugar", "lugar_prod", "lugar_produccion"]
+)
+
+col_mes = detectar_columna(
+    envios_p,
+    ["mes_inspeccion", "mes"]
+)
 
 # =================================================
 # VALIDACIÓN
 # =================================================
 if not col_cod_envio or not col_cod_campo or not col_mes:
-    st.error("No se encontraron las columnas necesarias para el análisis.")
+    st.error("❌ No se pudieron vincular las columnas necesarias.")
     st.stop()
 
 # =================================================
@@ -156,7 +172,7 @@ df_cruce = envios_p.merge(
 )
 
 # =================================================
-# ORDEN MESES
+# ORDEN DE MESES
 # =================================================
 orden_meses = [
     "enero","febrero","marzo","abril","mayo","junio",
@@ -179,7 +195,7 @@ df_cruce[col_mes] = pd.Categorical(
 # =================================================
 # AGRUPACIÓN
 # =================================================
-envios_por_campo_mes = (
+envios_campo_mes = (
     df_cruce
     .groupby([col_mes, col_cod_envio])
     .size()
@@ -189,37 +205,26 @@ envios_por_campo_mes = (
 # =================================================
 # VISUALIZACIÓN
 # =================================================
-st.subheader("📊 Envíos por campo certificado – evolución mensual")
+st.subheader("📊 Envíos por campo certificado – análisis mensual")
 
 campo_sel = st.selectbox(
-    "Selecciona un campo certificado",
-    sorted(envios_por_campo_mes[col_cod_envio].unique())
+    "Campo certificado",
+    sorted(envios_campo_mes[col_cod_envio].unique())
 )
 
-df_plot = envios_por_campo_mes[
-    envios_por_campo_mes[col_cod_envio] == campo_sel
+df_plot = envios_campo_mes[
+    envios_campo_mes[col_cod_envio] == campo_sel
 ]
 
-st.bar_chart(
-    df_plot.set_index(col_mes)["envios"]
-)
+st.bar_chart(df_plot.set_index(col_mes)["envios"])
+
+st.markdown("### 📋 Detalle completo")
+st.dataframe(envios_campo_mes, use_container_width=True)
 
 # =================================================
-# TABLA DETALLE
-# =================================================
-st.markdown("### 📋 Detalle de envíos por campo")
-st.dataframe(
-    envios_por_campo_mes,
-    use_container_width=True,
-    height=350
-)
-
-# =================================================
-# MENSAJE ESTRATÉGICO
+# MENSAJE FINAL
 # =================================================
 st.info(
-    "Este análisis permite identificar el uso real de cada campo certificado, "
-    "evaluando su participación en la actividad exportadora mes a mes. "
-    "Es una herramienta clave para detectar subutilización, concentración "
-    "o necesidad de expansión de la infraestructura productiva certificada."
+    "Este módulo vincula trazabilidad de envíos con infraestructura certificada, "
+    "permitiendo evaluar uso real de campos productivos y su evolución mensual."
 )
