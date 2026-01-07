@@ -37,6 +37,8 @@ st.write("MVP – Análisis, trazabilidad y simulación de decisiones")
 # ---------------------------
 # CARGA DE DATOS
 # ---------------------------
+import unicodedata
+
 data = pd.read_csv(
     "datos_reales.csv",
     sep=";",
@@ -44,10 +46,20 @@ data = pd.read_csv(
     on_bad_lines="skip"
 )
 
+# -------- NORMALIZAR ENCABEZADOS --------
+def normalizar(texto):
+    texto = texto.strip().lower()
+    texto = unicodedata.normalize("NFKD", texto)
+    texto = texto.encode("ascii", "ignore").decode("utf-8")
+    texto = texto.replace(" ", "_")
+    return texto
+
+data.columns = [normalizar(c) for c in data.columns]
+
 data.columns = data.columns.str.strip()
 
 # Normalización
-data["Producto"] = data["Producto"].str.strip().str.lower()
+data["producto"] = data["producto"].astype(str).str.strip().str.lower()
 
 # ---------------------------
 # FILTROS
@@ -56,7 +68,7 @@ st.sidebar.header("🔍 Filtros")
 
 producto = st.sidebar.selectbox(
     "Producto",
-    sorted(data["Producto"].unique())
+    sorted(data["producto"].unique())
 )
 
 pais_destino = st.sidebar.multiselect(
@@ -64,7 +76,7 @@ pais_destino = st.sidebar.multiselect(
     sorted(data["Pais Destino"].dropna().unique())
 )
 
-df = data[data["Producto"] == producto]
+df = data[data["producto"] == producto]
 
 if pais_destino:
     df = df[df["Pais Destino"].isin(pais_destino)]
@@ -88,17 +100,14 @@ def calcular_score(row, rechazo):
     score = 100
     score -= rechazo * 0.6
 
-    if row["Estado Certificado"] != "APROBADO":
+    if "estado_certificado" in row and str(row["estado_certificado"]).upper() != "APROBADO":
         score -= 20
 
-    if row["Certificación Electrónica"] == "NO":
+    if "certificacion_electronica" in row and str(row["certificacion_electronica"]).upper() == "NO":
         score -= 10
 
     return max(round(score, 1), 0)
 
-df["Score Riesgo"] = df.apply(
-    lambda row: calcular_score(row, rechazo_manual),
-    axis=1
 )
 
 def clasificar(score):
