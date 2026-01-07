@@ -29,18 +29,18 @@ if "autenticado" not in st.session_state:
     st.stop()
 
 # ---------------------------
-# APLICACIÓN PRINCIPAL
+# APP PRINCIPAL
 # ---------------------------
 st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
-st.write("MVP funcional – Análisis y trazabilidad de certificaciones fitosanitarias")
+st.write("MVP – Análisis, trazabilidad y simulación de decisiones")
 
 # ---------------------------
 # CARGA DE DATOS
 # ---------------------------
 data = pd.read_csv("datos_reales.csv")
-
-# Limpieza básica
 data.columns = data.columns.str.strip()
+
+# Normalización
 data["Producto"] = data["Producto"].str.strip().str.lower()
 
 # ---------------------------
@@ -64,20 +64,62 @@ if pais_destino:
     df = df[df["Pais Destino"].isin(pais_destino)]
 
 # ---------------------------
-# MÉTRICAS CLAVE
+# INPUT MANUAL DE RECHAZOS
+# ---------------------------
+st.sidebar.header("⚙️ Parámetros del modelo")
+
+rechazo_manual = st.sidebar.slider(
+    "Porcentaje de rechazos estimado (%)",
+    min_value=0,
+    max_value=100,
+    value=20
+)
+
+# ---------------------------
+# SCORING (CONTROLADO POR TI)
+# ---------------------------
+def calcular_score(row, rechazo):
+    score = 100
+    score -= rechazo * 0.6
+
+    if row["Estado Certificado"] != "APROBADO":
+        score -= 20
+
+    if row["Certificación Electrónica"] == "NO":
+        score -= 10
+
+    return max(round(score, 1), 0)
+
+df["Score Riesgo"] = df.apply(
+    lambda row: calcular_score(row, rechazo_manual),
+    axis=1
+)
+
+def clasificar(score):
+    if score >= 80:
+        return "🟢 Bajo Riesgo"
+    elif score >= 60:
+        return "🟡 Riesgo Medio"
+    else:
+        return "🔴 Alto Riesgo"
+
+df["Nivel Riesgo"] = df["Score Riesgo"].apply(clasificar)
+
+# ---------------------------
+# MÉTRICAS
 # ---------------------------
 st.subheader("📊 Indicadores clave")
 
 col1, col2, col3 = st.columns(3)
 
-col1.metric("Registros analizados", len(df))
-col2.metric("Certificados generados", df["Certificados Generados"].sum())
-col3.metric("Peso Neto Total", round(df["Peso Neto"].sum(), 2))
+col1.metric("Registros evaluados", len(df))
+col2.metric("Rechazo simulado (%)", rechazo_manual)
+col3.metric("Score promedio", round(df["Score Riesgo"].mean(), 1))
 
 # ---------------------------
-# TABLA COMPLETA (CORE)
+# TABLA FINAL
 # ---------------------------
-st.subheader("📋 Base de datos detallada")
+st.subheader("📋 Resultados del análisis")
 
 st.dataframe(
     df,
@@ -86,10 +128,9 @@ st.dataframe(
 )
 
 # ---------------------------
-# MENSAJE TÉCNICO
+# MENSAJE FINAL
 # ---------------------------
 st.info(
-    "La plataforma Data Core integra, filtra y analiza grandes volúmenes de información "
-    "relacionada a certificaciones, inspecciones y exportaciones agrícolas, "
-    "permitiendo trazabilidad y análisis para la toma de decisiones."
+    "El motor de Data Core permite simular escenarios de rechazo y evaluar su impacto "
+    "en el riesgo de certificación y exportación, apoyando la toma de decisiones."
 )
