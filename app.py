@@ -67,4 +67,5 @@ def cargar_envios():
         dfs.append(df)
 
     if not dfs:
-        st.error("No se cargaron datos de e
+        st.error("No se cargaron datos de envíos.")
+
