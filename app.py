@@ -37,7 +37,7 @@ st.write("MVP funcional – Análisis y trazabilidad de certificaciones fitosani
 # ---------------------------
 # CARGA DE DATOS
 # ---------------------------
-data = pd.read_csv("datos_limon.csv")
+data = pd.read_csv("datos_reales.csv")
 
 # Limpieza básica
 data.columns = data.columns.str.strip()
