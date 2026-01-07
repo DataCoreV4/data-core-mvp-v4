@@ -111,10 +111,18 @@ def cargar_campo():
 campo = cargar_campo()
 
 # =================================================
-# INTERFAZ
+# INTERFAZ PRINCIPAL
 # =================================================
-st.title("🌱 Data Core – Inteligencia Agroexportadora")
-st.write("Uso real de campos certificados según envíos registrados")
+st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
+st.write(
+    "MVP funcional para visualización de envíos agroexportadores "
+    "y campos de producción certificados."
+)
+
+# =================================================
+# SIDEBAR – FILTROS
+# =================================================
+st.sidebar.header("🔍 Filtros")
 
 producto_sel = st.sidebar.selectbox(
     "Producto",
@@ -124,105 +132,53 @@ producto_sel = st.sidebar.selectbox(
 envios_p = envios[envios["producto"] == producto_sel]
 campo_p = campo[campo["producto"] == producto_sel]
 
-# =================================================
-# DIAGNÓSTICO (YA CONFIRMADO, LO DEJAMOS)
-# =================================================
-with st.expander("🧩 Ver columnas detectadas"):
-    st.write("📦 Envíos:", list(envios_p.columns))
-    st.write("🌾 Campo:", list(campo_p.columns))
+# Filtro país destino
+col_pais = detectar_columna(envios_p, ["pais_destino"])
+
+if col_pais:
+    paises = sorted(envios_p[col_pais].dropna().astype(str).unique())
+    pais_sel = st.sidebar.selectbox(
+        "País de destino",
+        ["Todos"] + paises
+    )
+    if pais_sel != "Todos":
+        envios_p = envios_p[envios_p[col_pais].astype(str) == pais_sel]
 
 # =================================================
-# DETECCIÓN REAL (AJUSTADA A TUS DATOS)
+# MÉTRICAS RESUMEN
 # =================================================
-col_cod_envio = detectar_columna(
+c1, c2 = st.columns(2)
+c1.metric("📦 Total de envíos", len(envios_p))
+c2.metric("🌾 Campos certificados", len(campo_p))
+
+# =================================================
+# TABLA ENVÍOS
+# =================================================
+st.subheader("📦 Envíos registrados")
+st.dataframe(
     envios_p,
-    ["cod_lugar", "produccia3n"]
-)
-
-col_cod_campo = detectar_columna(
-    campo_p,
-    ["cod_lugar_prod"]
-)
-
-col_mes = detectar_columna(
-    envios_p,
-    ["mes_inspeccia3n", "mes_inspec"]
+    use_container_width=True,
+    height=350
 )
 
 # =================================================
-# VALIDACIÓN FINAL
+# TABLA CAMPO
 # =================================================
-if not col_cod_envio or not col_cod_campo or not col_mes:
-    st.error("❌ No se pudieron vincular las columnas necesarias.")
-    st.stop()
-
-# =================================================
-# CRUCE DE DATOS
-# =================================================
-envios_p[col_cod_envio] = envios_p[col_cod_envio].astype(str).str.strip()
-campo_p[col_cod_campo] = campo_p[col_cod_campo].astype(str).str.strip()
-
-df_cruce = envios_p.merge(
-    campo_p[[col_cod_campo]],
-    left_on=col_cod_envio,
-    right_on=col_cod_campo,
-    how="inner"
-)
+st.subheader("🌾 Campos de producción certificados")
+if not campo_p.empty:
+    st.dataframe(
+        campo_p,
+        use_container_width=True,
+        height=350
+    )
+else:
+    st.info("No hay datos de campo disponibles para este producto.")
 
 # =================================================
-# ORDEN DE MESES
-# =================================================
-orden_meses = [
-    "enero","febrero","marzo","abril","mayo","junio",
-    "julio","agosto","septiembre","octubre","noviembre","diciembre"
-]
-
-df_cruce[col_mes] = (
-    df_cruce[col_mes]
-    .astype(str)
-    .str.lower()
-    .str.strip()
-)
-
-df_cruce[col_mes] = pd.Categorical(
-    df_cruce[col_mes],
-    categories=orden_meses,
-    ordered=True
-)
-
-# =================================================
-# AGRUPACIÓN
-# =================================================
-envios_campo_mes = (
-    df_cruce
-    .groupby([col_mes, col_cod_envio])
-    .size()
-    .reset_index(name="envios")
-)
-
-# =================================================
-# VISUALIZACIÓN
-# =================================================
-st.subheader("📊 Envíos por campo certificado – evolución mensual")
-
-campo_sel = st.selectbox(
-    "Campo certificado",
-    sorted(envios_campo_mes[col_cod_envio].unique())
-)
-
-df_plot = envios_campo_mes[
-    envios_campo_mes[col_cod_envio] == campo_sel
-]
-
-st.bar_chart(df_plot.set_index(col_mes)["envios"])
-
-st.markdown("### 📋 Detalle completo")
-st.dataframe(envios_campo_mes, use_container_width=True)
-
-# =================================================
-# MENSAJE ESTRATÉGICO
+# MENSAJE FINAL
 # =================================================
 st.info(
-    "Este módulo vincula trazabilidad de envíos con campos certificados, "
-    "permitiendo evaluar el uso real de cada unidad productiva y su evolución mensual."
+    "Data Core integra información de envíos agroexportadores y campos "
+    "de producción certificados, permitiendo análisis por producto y "
+    "país de destino como base para inteligencia comercial y trazabilidad."
 )
