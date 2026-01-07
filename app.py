@@ -114,7 +114,7 @@ campo = cargar_campo()
 # INTERFAZ
 # =================================================
 st.title("🌱 Data Core – Inteligencia Agroexportadora")
-st.write("Vinculación de envíos con campos certificados (uso real)")
+st.write("Uso real de campos certificados según envíos registrados")
 
 producto_sel = st.sidebar.selectbox(
     "Producto",
@@ -125,34 +125,32 @@ envios_p = envios[envios["producto"] == producto_sel]
 campo_p = campo[campo["producto"] == producto_sel]
 
 # =================================================
-# MOSTRAR COLUMNAS (DEBUG CONTROLADO)
+# DIAGNÓSTICO (YA CONFIRMADO, LO DEJAMOS)
 # =================================================
-with st.expander("🧩 Ver columnas detectadas (diagnóstico)"):
-    st.write("📦 Envíos:")
-    st.write(list(envios_p.columns))
-    st.write("🌾 Campo:")
-    st.write(list(campo_p.columns))
+with st.expander("🧩 Ver columnas detectadas"):
+    st.write("📦 Envíos:", list(envios_p.columns))
+    st.write("🌾 Campo:", list(campo_p.columns))
 
 # =================================================
-# DETECCIÓN FLEXIBLE
+# DETECCIÓN REAL (AJUSTADA A TUS DATOS)
 # =================================================
 col_cod_envio = detectar_columna(
     envios_p,
-    ["cod_lugar", "codigo_lugar", "lugar_produccion"]
+    ["cod_lugar", "produccia3n"]
 )
 
 col_cod_campo = detectar_columna(
     campo_p,
-    ["cod_lugar", "codigo_lugar", "lugar_prod", "lugar_produccion"]
+    ["cod_lugar_prod"]
 )
 
 col_mes = detectar_columna(
     envios_p,
-    ["mes_inspeccion", "mes"]
+    ["mes_inspeccia3n", "mes_inspec"]
 )
 
 # =================================================
-# VALIDACIÓN
+# VALIDACIÓN FINAL
 # =================================================
 if not col_cod_envio or not col_cod_campo or not col_mes:
     st.error("❌ No se pudieron vincular las columnas necesarias.")
@@ -205,7 +203,7 @@ envios_campo_mes = (
 # =================================================
 # VISUALIZACIÓN
 # =================================================
-st.subheader("📊 Envíos por campo certificado – análisis mensual")
+st.subheader("📊 Envíos por campo certificado – evolución mensual")
 
 campo_sel = st.selectbox(
     "Campo certificado",
@@ -222,9 +220,9 @@ st.markdown("### 📋 Detalle completo")
 st.dataframe(envios_campo_mes, use_container_width=True)
 
 # =================================================
-# MENSAJE FINAL
+# MENSAJE ESTRATÉGICO
 # =================================================
 st.info(
-    "Este módulo vincula trazabilidad de envíos con infraestructura certificada, "
-    "permitiendo evaluar uso real de campos productivos y su evolución mensual."
+    "Este módulo vincula trazabilidad de envíos con campos certificados, "
+    "permitiendo evaluar el uso real de cada unidad productiva y su evolución mensual."
 )
