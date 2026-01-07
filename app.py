@@ -37,7 +37,13 @@ st.write("MVP – Análisis, trazabilidad y simulación de decisiones")
 # ---------------------------
 # CARGA DE DATOS
 # ---------------------------
-data = pd.read_csv("datos_reales.csv")
+data = pd.read_csv(
+    "datos_reales.csv",
+    sep=";",
+    encoding="latin1",
+    on_bad_lines="skip"
+)
+
 data.columns = data.columns.str.strip()
 
 # Normalización
