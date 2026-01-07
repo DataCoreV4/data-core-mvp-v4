@@ -9,7 +9,7 @@ st.set_page_config(
 st.title("🌱 Data Core – Motor de Inteligencia Agroexportadora")
 st.write("MVP – Plataforma de Scoring y Decisión para Compra de Fruta")
 
-data = pd.read_csv("data.csv")
+data = pd.read_csv("datos_reales.csv")
 
 st.sidebar.header("🔍 Filtros de análisis")
 
