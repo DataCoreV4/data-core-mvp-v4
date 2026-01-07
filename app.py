@@ -4,7 +4,7 @@ import unicodedata
 import os
 
 # =================================================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # =================================================
 st.set_page_config(
     page_title="Data Core | Inteligencia Agroexportadora",
@@ -12,7 +12,7 @@ st.set_page_config(
 )
 
 # =================================================
-# LOGIN SIMPLE
+# LOGIN
 # =================================================
 def login():
     st.title("🔐 Acceso a Data Core")
@@ -22,7 +22,7 @@ def login():
     if st.button("Ingresar"):
         if usuario == "admin" and password == "datacore123":
             st.session_state["auth"] = True
-            st.success("Acceso correcto. Cargando plataforma…")
+            st.success("Acceso correcto")
         else:
             st.error("Usuario o contraseña incorrectos")
 
@@ -34,7 +34,7 @@ if not st.session_state.get("auth", False):
     st.stop()
 
 # =================================================
-# FUNCIONES AUXILIARES
+# FUNCIONES
 # =================================================
 def normalizar(texto):
     texto = str(texto).strip().lower()
@@ -51,7 +51,7 @@ def detectar_columna(df, claves):
     return None
 
 # =================================================
-# CARGA DE DATOS DE ENVÍOS
+# CARGA ENVÍOS
 # =================================================
 @st.cache_data
 def cargar_envios():
@@ -61,10 +61,8 @@ def cargar_envios():
     }
 
     dfs = []
-
     for producto, archivo in archivos.items():
         if not os.path.exists(archivo):
-            st.warning(f"⚠️ Archivo no encontrado: {archivo}")
             continue
 
         df = pd.read_csv(
@@ -77,16 +75,12 @@ def cargar_envios():
         df["producto"] = producto
         dfs.append(df)
 
-    if not dfs:
-        st.error("No se cargaron datos de envíos.")
-        st.stop()
-
     return pd.concat(dfs, ignore_index=True)
 
 envios = cargar_envios()
 
 # =================================================
-# CARGA DE DATOS DE CAMPO
+# CARGA CAMPO
 # =================================================
 @st.cache_data
 def cargar_campo():
@@ -96,10 +90,8 @@ def cargar_campo():
     }
 
     dfs = []
-
     for producto, archivo in archivos.items():
         if not os.path.exists(archivo):
-            st.warning(f"⚠️ Archivo de campo no encontrado: {archivo}")
             continue
 
         df = pd.read_csv(
@@ -114,111 +106,97 @@ def cargar_campo():
 
     if dfs:
         return pd.concat(dfs, ignore_index=True)
-    else:
-        return pd.DataFrame()
+    return pd.DataFrame()
 
 campo = cargar_campo()
 
 # =================================================
-# INTERFAZ PRINCIPAL
+# INTERFAZ
 # =================================================
 st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
-st.write("MVP funcional para análisis de envíos e infraestructura certificada")
+st.write("Análisis estratégico de envíos vs capacidad productiva certificada")
 
 # =================================================
-# SIDEBAR – FILTROS
+# FILTRO PRODUCTO
 # =================================================
-st.sidebar.header("🔍 Filtros")
-
 producto_sel = st.sidebar.selectbox(
     "Producto",
     sorted(envios["producto"].unique())
 )
 
-df = envios[envios["producto"] == producto_sel]
-
-col_pais = detectar_columna(df, ["pais_destino"])
-col_mes = detectar_columna(df, ["mes_inspeccion"])
-
-orden_meses = [
-    "enero","febrero","marzo","abril","mayo","junio",
-    "julio","agosto","septiembre","octubre","noviembre","diciembre"
-]
-
-if col_mes:
-    df[col_mes] = df[col_mes].astype(str).str.lower().str.strip()
-    df[col_mes] = pd.Categorical(df[col_mes], categories=orden_meses, ordered=True)
-
-    mes_sel = st.sidebar.selectbox(
-        "Mes de inspección",
-        ["Todos"] + orden_meses
-    )
-    if mes_sel != "Todos":
-        df = df[df[col_mes] == mes_sel]
-
-if col_pais:
-    paises = sorted(df[col_pais].dropna().astype(str).unique())
-    pais_sel = st.sidebar.selectbox(
-        "País de destino",
-        ["Todos los países"] + paises
-    )
-    if pais_sel != "Todos los países":
-        df = df[df[col_pais].astype(str) == pais_sel]
+envios_p = envios[envios["producto"] == producto_sel]
+campo_p = campo[campo["producto"] == producto_sel]
 
 # =================================================
-# MÓDULO 1 – ENVÍOS
+# MÉTRICAS BASE
 # =================================================
-st.subheader("📦 Módulo 1: Envíos e inspecciones")
+total_envios = len(envios_p)
 
-c1, c2 = st.columns(2)
-c1.metric("Registros de envíos", len(df))
-c2.metric("Países destino", df[col_pais].nunique() if col_pais else 0)
+col_lugar = detectar_columna(
+    campo_p,
+    ["lugar_produccion", "codigo_lugar", "predio", "campo"]
+)
 
-if col_mes:
-    st.markdown("**📈 Inspecciones por mes**")
-    st.bar_chart(df.groupby(col_mes).size())
-
-if col_pais:
-    st.markdown("**🌍 Envíos por país destino**")
-    ranking = df.groupby(col_pais).size().reset_index(name="envíos")
-    st.dataframe(
-        ranking.sort_values("envíos", ascending=False),
-        use_container_width=True
-    )
-
-st.markdown("**📋 Detalle de envíos**")
-st.dataframe(df, use_container_width=True, height=300)
+total_lugares = campo_p[col_lugar].nunique() if col_lugar else 0
 
 # =================================================
-# MÓDULO 2 – CAMPO
+# INDICADOR ESTRELLA
 # =================================================
-st.subheader("🌾 Módulo 2: Lugares de producción certificados")
+st.subheader("⭐ Indicador estratégico: Uso de capacidad productiva")
 
-if not campo.empty:
-    campo_prod = campo[campo["producto"] == producto_sel]
+c1, c2, c3 = st.columns(3)
+c1.metric("📦 Envíos registrados", total_envios)
+c2.metric("🌾 Lugares certificados", total_lugares)
 
-    col_lugar = detectar_columna(
-        campo_prod,
-        ["lugar_produccion", "codigo_lugar", "predio", "campo"]
-    )
-
-    if col_lugar:
-        st.metric(
-            "Lugares de producción certificados",
-            campo_prod[col_lugar].nunique()
-        )
-
-        st.markdown("**📋 Base de datos de campo**")
-        st.dataframe(campo_prod, use_container_width=True, height=300)
-    else:
-        st.warning("No se identificó la columna de lugar de producción.")
+if total_lugares > 0:
+    ratio = round(total_envios / total_lugares, 2)
 else:
-    st.warning("No hay datos de campo cargados.")
+    ratio = 0
+
+c3.metric("⚖️ Envíos por lugar", ratio)
 
 # =================================================
-# MENSAJE FINAL
+# INTERPRETACIÓN AUTOMÁTICA
+# =================================================
+if ratio < 1:
+    st.error("🔴 Capacidad productiva subutilizada")
+    st.write("Existe infraestructura certificada que no está siendo aprovechada comercialmente.")
+elif 1 <= ratio <= 3:
+    st.warning("🟡 Uso equilibrado de la capacidad productiva")
+    st.write("La relación entre producción certificada y exportaciones es adecuada.")
+else:
+    st.success("🟢 Alta intensidad exportadora")
+    st.write("Alta presión exportadora sobre la infraestructura certificada.")
+
+# =================================================
+# VISUALIZACIÓN
+# =================================================
+st.markdown("### 📊 Comparación visual")
+
+grafico = pd.DataFrame({
+    "Indicador": ["Envíos", "Lugares certificados"],
+    "Cantidad": [total_envios, total_lugares]
+})
+
+st.bar_chart(grafico.set_index("Indicador"))
+
+# =================================================
+# DETALLE
+# =================================================
+st.markdown("### 📋 Detalle de envíos")
+st.dataframe(envios_p, use_container_width=True, height=300)
+
+st.markdown("### 🌾 Detalle de lugares de producción")
+if not campo_p.empty:
+    st.dataframe(campo_p, use_container_width=True, height=300)
+else:
+    st.info("No hay datos de campo disponibles para este producto.")
+
+# =================================================
+# CIERRE
 # =================================================
 st.info(
-    "Plataforma que integra información de envíos e infraestructura productiva certificada, "
-    "orientada a toma de decisiones estratégicas en agroexportación."
+    "Este indicador permite evaluar brechas entre capacidad productiva certificada "
+    "y actividad exportadora real, apoyando decisiones de inversión, articulación comercial "
+    "y planificación sectorial."
 )
