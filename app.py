@@ -41,6 +41,7 @@ def normalizar(texto):
     texto = unicodedata.normalize("NFKD", texto)
     texto = texto.encode("ascii", "ignore").decode("utf-8")
     texto = texto.replace(" ", "_")
+    texto = texto.replace(".", "")
     return texto
 
 def detectar_columna(df, claves):
@@ -113,8 +114,8 @@ campo = cargar_campo()
 # =================================================
 # INTERFAZ
 # =================================================
-st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
-st.write("Análisis estratégico de envíos vs capacidad productiva certificada")
+st.title("🌱 Data Core – Inteligencia Agroexportadora")
+st.write("Uso real de campos certificados según envíos registrados")
 
 # =================================================
 # FILTRO PRODUCTO
@@ -128,75 +129,97 @@ envios_p = envios[envios["producto"] == producto_sel]
 campo_p = campo[campo["producto"] == producto_sel]
 
 # =================================================
-# MÉTRICAS BASE
+# DETECTAR COLUMNAS CLAVE
 # =================================================
-total_envios = len(envios_p)
+col_cod_envio = detectar_columna(envios_p, ["cod_lugar_de_produccion"])
+col_cod_campo = detectar_columna(campo_p, ["cod_lugar_prod"])
+col_mes = detectar_columna(envios_p, ["mes_inspeccion"])
 
-col_lugar = detectar_columna(
-    campo_p,
-    ["lugar_produccion", "codigo_lugar", "predio", "campo"]
+# =================================================
+# VALIDACIÓN
+# =================================================
+if not col_cod_envio or not col_cod_campo or not col_mes:
+    st.error("No se encontraron las columnas necesarias para el análisis.")
+    st.stop()
+
+# =================================================
+# CRUCE DE DATOS
+# =================================================
+envios_p[col_cod_envio] = envios_p[col_cod_envio].astype(str).str.strip()
+campo_p[col_cod_campo] = campo_p[col_cod_campo].astype(str).str.strip()
+
+df_cruce = envios_p.merge(
+    campo_p[[col_cod_campo]],
+    left_on=col_cod_envio,
+    right_on=col_cod_campo,
+    how="inner"
 )
 
-total_lugares = campo_p[col_lugar].nunique() if col_lugar else 0
+# =================================================
+# ORDEN MESES
+# =================================================
+orden_meses = [
+    "enero","febrero","marzo","abril","mayo","junio",
+    "julio","agosto","septiembre","octubre","noviembre","diciembre"
+]
+
+df_cruce[col_mes] = (
+    df_cruce[col_mes]
+    .astype(str)
+    .str.lower()
+    .str.strip()
+)
+
+df_cruce[col_mes] = pd.Categorical(
+    df_cruce[col_mes],
+    categories=orden_meses,
+    ordered=True
+)
 
 # =================================================
-# INDICADOR ESTRELLA
+# AGRUPACIÓN
 # =================================================
-st.subheader("⭐ Indicador estratégico: Uso de capacidad productiva")
-
-c1, c2, c3 = st.columns(3)
-c1.metric("📦 Envíos registrados", total_envios)
-c2.metric("🌾 Lugares certificados", total_lugares)
-
-if total_lugares > 0:
-    ratio = round(total_envios / total_lugares, 2)
-else:
-    ratio = 0
-
-c3.metric("⚖️ Envíos por lugar", ratio)
-
-# =================================================
-# INTERPRETACIÓN AUTOMÁTICA
-# =================================================
-if ratio < 1:
-    st.error("🔴 Capacidad productiva subutilizada")
-    st.write("Existe infraestructura certificada que no está siendo aprovechada comercialmente.")
-elif 1 <= ratio <= 3:
-    st.warning("🟡 Uso equilibrado de la capacidad productiva")
-    st.write("La relación entre producción certificada y exportaciones es adecuada.")
-else:
-    st.success("🟢 Alta intensidad exportadora")
-    st.write("Alta presión exportadora sobre la infraestructura certificada.")
+envios_por_campo_mes = (
+    df_cruce
+    .groupby([col_mes, col_cod_envio])
+    .size()
+    .reset_index(name="envios")
+)
 
 # =================================================
 # VISUALIZACIÓN
 # =================================================
-st.markdown("### 📊 Comparación visual")
+st.subheader("📊 Envíos por campo certificado – evolución mensual")
 
-grafico = pd.DataFrame({
-    "Indicador": ["Envíos", "Lugares certificados"],
-    "Cantidad": [total_envios, total_lugares]
-})
+campo_sel = st.selectbox(
+    "Selecciona un campo certificado",
+    sorted(envios_por_campo_mes[col_cod_envio].unique())
+)
 
-st.bar_chart(grafico.set_index("Indicador"))
+df_plot = envios_por_campo_mes[
+    envios_por_campo_mes[col_cod_envio] == campo_sel
+]
 
-# =================================================
-# DETALLE
-# =================================================
-st.markdown("### 📋 Detalle de envíos")
-st.dataframe(envios_p, use_container_width=True, height=300)
-
-st.markdown("### 🌾 Detalle de lugares de producción")
-if not campo_p.empty:
-    st.dataframe(campo_p, use_container_width=True, height=300)
-else:
-    st.info("No hay datos de campo disponibles para este producto.")
+st.bar_chart(
+    df_plot.set_index(col_mes)["envios"]
+)
 
 # =================================================
-# CIERRE
+# TABLA DETALLE
+# =================================================
+st.markdown("### 📋 Detalle de envíos por campo")
+st.dataframe(
+    envios_por_campo_mes,
+    use_container_width=True,
+    height=350
+)
+
+# =================================================
+# MENSAJE ESTRATÉGICO
 # =================================================
 st.info(
-    "Este indicador permite evaluar brechas entre capacidad productiva certificada "
-    "y actividad exportadora real, apoyando decisiones de inversión, articulación comercial "
-    "y planificación sectorial."
+    "Este análisis permite identificar el uso real de cada campo certificado, "
+    "evaluando su participación en la actividad exportadora mes a mes. "
+    "Es una herramienta clave para detectar subutilización, concentración "
+    "o necesidad de expansión de la infraestructura productiva certificada."
 )
