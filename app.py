@@ -1,70 +1,95 @@
 import streamlit as st
 import pandas as pd
 
+# ---------------------------
+# CONFIGURACIÓN GENERAL
+# ---------------------------
 st.set_page_config(
     page_title="Data Core | Inteligencia Agroexportadora",
     layout="wide"
 )
 
-st.title("🌱 Data Core – Motor de Inteligencia Agroexportadora")
-st.write("MVP – Plataforma de Scoring y Decisión para Compra de Fruta")
+# ---------------------------
+# LOGIN SIMPLE (MVP)
+# ---------------------------
+def login():
+    st.title("🔐 Acceso a Data Core")
 
-data = pd.read_csv("datos_reales.csv")
-st.write("Vista previa de los datos cargados:")
-st.dataframe(data)
+    usuario = st.text_input("Usuario")
+    password = st.text_input("Contraseña", type="password")
 
-st.sidebar.header("🔍 Filtros de análisis")
+    if st.button("Ingresar"):
+        if usuario == "admin" and password == "datacore123":
+            st.session_state["autenticado"] = True
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
-cultivo = st.sidebar.selectbox(
-    "Selecciona el cultivo",
-    data["cultivo"].unique()
+if "autenticado" not in st.session_state:
+    login()
+    st.stop()
+
+# ---------------------------
+# APLICACIÓN PRINCIPAL
+# ---------------------------
+st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
+st.write("MVP funcional – Análisis y trazabilidad de certificaciones fitosanitarias")
+
+# ---------------------------
+# CARGA DE DATOS
+# ---------------------------
+data = pd.read_csv("datos_limon.csv")
+
+# Limpieza básica
+data.columns = data.columns.str.strip()
+data["Producto"] = data["Producto"].str.strip().str.lower()
+
+# ---------------------------
+# FILTROS
+# ---------------------------
+st.sidebar.header("🔍 Filtros")
+
+producto = st.sidebar.selectbox(
+    "Producto",
+    sorted(data["Producto"].unique())
 )
 
-mercado = st.sidebar.selectbox(
-    "Selecciona mercado destino",
-    ["UE", "EEUU", "Mercado Nacional"]
+pais_destino = st.sidebar.multiselect(
+    "País Destino",
+    sorted(data["Pais Destino"].dropna().unique())
 )
 
-df = data[data["cultivo"] == cultivo]
+df = data[data["Producto"] == producto]
 
-def calcular_score(row):
-    score = 0
-    score += (100 - row["rechazos_pct"]) * 0.4
-    score += row["certificacion"] * 30
-    score += row["rendimiento"] * 0.3
-    return round(score, 1)
+if pais_destino:
+    df = df[df["Pais Destino"].isin(pais_destino)]
 
-df["score"] = df.apply(calcular_score, axis=1)
+# ---------------------------
+# MÉTRICAS CLAVE
+# ---------------------------
+st.subheader("📊 Indicadores clave")
 
-def clasificar(score):
-    if score >= 80:
-        return "🟢 Bajo Riesgo"
-    elif score >= 60:
-        return "🟡 Riesgo Medio"
-    else:
-        return "🔴 Alto Riesgo"
+col1, col2, col3 = st.columns(3)
 
-df["riesgo"] = df["score"].apply(clasificar)
+col1.metric("Registros analizados", len(df))
+col2.metric("Certificados generados", df["Certificados Generados"].sum())
+col3.metric("Peso Neto Total", round(df["Peso Neto"].sum(), 2))
 
-st.subheader("📊 Resultados del análisis")
+# ---------------------------
+# TABLA COMPLETA (CORE)
+# ---------------------------
+st.subheader("📋 Base de datos detallada")
 
 st.dataframe(
-    df[["campo", "score", "riesgo", "rechazos_pct", "rendimiento"]],
-    use_container_width=True
+    df,
+    use_container_width=True,
+    height=500
 )
 
-st.subheader("⚙️ Recomendación del sistema")
-
-mejor_campo = df.sort_values("score", ascending=False).iloc[0]
-
-st.success(
-    f"""
-    ✅ Campo recomendado: **{mejor_campo['campo']}**  
-    📈 Score: **{mejor_campo['score']}**  
-    🌍 Mercado sugerido: **{mercado}**
-    """
-)
-
+# ---------------------------
+# MENSAJE TÉCNICO
+# ---------------------------
 st.info(
-    "Resultado generado automáticamente por el motor de scoring de Data Core."
+    "La plataforma Data Core integra, filtra y analiza grandes volúmenes de información "
+    "relacionada a certificaciones, inspecciones y exportaciones agrícolas, "
+    "permitiendo trazabilidad y análisis para la toma de decisiones."
 )
