@@ -12,12 +12,18 @@ st.set_page_config(
 )
 
 # ===============================
-# FUNCIONES DE USUARIOS
+# CONFIGURACIÓN ADMINISTRADOR
 # ===============================
-USERS_FILE = "usuarios.csv"
-
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
+
+ADMIN_EMAIL = "admin@datacore.pe"
+ADMIN_PASSWORD = hash_password("Admin2025!")
+
+# ===============================
+# ARCHIVO DE USUARIOS
+# ===============================
+USERS_FILE = "usuarios.csv"
 
 def cargar_usuarios():
     if os.path.exists(USERS_FILE):
@@ -28,23 +34,34 @@ def cargar_usuarios():
             "empresa", "cargo", "password"
         ])
 
+def correo_existe(correo):
+    usuarios = cargar_usuarios()
+    return correo in usuarios["correo"].values
+
 def guardar_usuario(data):
     usuarios = cargar_usuarios()
     usuarios = pd.concat([usuarios, pd.DataFrame([data])], ignore_index=True)
     usuarios.to_csv(USERS_FILE, index=False)
 
-def correo_existe(correo):
-    usuarios = cargar_usuarios()
-    return correo in usuarios["correo"].values
-
 def validar_login(correo, password):
+    # ADMIN
+    if correo == ADMIN_EMAIL and hash_password(password) == ADMIN_PASSWORD:
+        st.session_state.admin = True
+        return True
+
+    # USUARIO NORMAL
     usuarios = cargar_usuarios()
     pwd_hash = hash_password(password)
     user = usuarios[
         (usuarios["correo"] == correo) &
         (usuarios["password"] == pwd_hash)
     ]
-    return not user.empty
+
+    if not user.empty:
+        st.session_state.admin = False
+        return True
+
+    return False
 
 # ===============================
 # SESIÓN
@@ -52,26 +69,29 @@ def validar_login(correo, password):
 if "login" not in st.session_state:
     st.session_state.login = False
 
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
 # ===============================
 # PORTADA / LOGIN / REGISTRO
 # ===============================
 if not st.session_state.login:
 
-    col1, col2, col3 = st.columns([1,2,1])
+    col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         if os.path.exists("logo_datacore.png"):
-            st.image("logo_datacore.png", width=250)
+            st.image("logo_datacore.png", width=260)
 
         st.title("🌱 Data Core")
         st.subheader("Plataforma de inteligencia agroexportadora")
         st.markdown(
-            "Análisis de datos reales de **certificaciones, inspecciones y envíos** "
-            "para la toma de decisiones estratégicas."
+            "Análisis de **datos reales de certificación, inspección y exportación** "
+            "para decisiones estratégicas en el sector agroexportador."
         )
 
         opcion = st.radio("Acceso", ["Iniciar sesión", "Registrarse"])
 
-        # -------- LOGIN --------
+        # LOGIN
         if opcion == "Iniciar sesión":
             correo = st.text_input("Correo electrónico")
             password = st.text_input("Contraseña", type="password")
@@ -85,7 +105,7 @@ if not st.session_state.login:
                 else:
                     st.error("Correo o contraseña incorrectos")
 
-        # -------- REGISTRO --------
+        # REGISTRO
         else:
             st.markdown("### Registro de usuario")
 
@@ -122,16 +142,24 @@ if not st.session_state.login:
     st.stop()
 
 # ===============================
-# DASHBOARD (USUARIO LOGUEADO)
+# SIDEBAR
 # ===============================
 st.sidebar.image("logo_datacore.png", width=180)
 st.sidebar.markdown(f"👤 Usuario: **{st.session_state.usuario}**")
-st.sidebar.info("Modo: Freemium")
+
+if st.session_state.admin:
+    st.sidebar.success("Modo: Administrador")
+else:
+    st.sidebar.info("Modo: Freemium")
 
 if st.sidebar.button("Cerrar sesión"):
     st.session_state.login = False
+    st.session_state.admin = False
     st.rerun()
 
+# ===============================
+# DASHBOARD
+# ===============================
 st.title("📊 Data Core – Dashboard")
 
 # ===============================
@@ -175,9 +203,9 @@ if envios.empty:
 # ===============================
 st.subheader("🔎 Filtros")
 
-colf1, colf2, colf3, colf4 = st.columns(4)
+col1, col2, col3, col4 = st.columns(4)
 
-with colf1:
+with col1:
     producto = st.selectbox(
         "Producto",
         sorted(envios["producto"].dropna().unique())
@@ -185,7 +213,7 @@ with colf1:
 
 dfp = envios[envios["producto"] == producto]
 
-with colf2:
+with col2:
     if "aao_inspeccia3n" in dfp.columns:
         anio = st.selectbox(
             "Año",
@@ -193,7 +221,7 @@ with colf2:
         )
         dfp = dfp[dfp["aao_inspeccia3n"] == anio]
 
-with colf3:
+with col3:
     if "mes_inspeccia3n" in dfp.columns:
         mes = st.selectbox(
             "Mes",
@@ -201,25 +229,24 @@ with colf3:
         )
         dfp = dfp[dfp["mes_inspeccia3n"] == mes]
 
-with colf4:
+with col4:
     paises = sorted(dfp["pais_destino"].dropna().unique())
-    pais = st.selectbox(
-        "País destino",
-        ["Todos"] + paises
-    )
+    pais = st.selectbox("País destino", ["Todos"] + paises)
     if pais != "Todos":
         dfp = dfp[dfp["pais_destino"] == pais]
 
 # ===============================
-# RESULTADOS
+# ENVÍOS
 # ===============================
 st.subheader("📦 Envíos registrados")
-
 st.metric("Total de envíos", len(dfp))
 
-st.dataframe(dfp.head(3), use_container_width=True)
-
-st.info("Modo freemium: solo se muestran las 3 primeras filas")
+if st.session_state.admin:
+    st.dataframe(dfp, use_container_width=True)
+    st.success("Acceso administrador – datos completos")
+else:
+    st.dataframe(dfp.head(3), use_container_width=True)
+    st.info("Modo freemium: solo se muestran las 3 primeras filas")
 
 # ===============================
 # CAMPOS CERTIFICADOS
@@ -227,7 +254,12 @@ st.info("Modo freemium: solo se muestran las 3 primeras filas")
 if not campos.empty:
     st.subheader("🌾 Campos certificados")
     st.metric("Total de campos registrados", campos.shape[0])
-    st.dataframe(campos.head(3), use_container_width=True)
-    st.info("Modo freemium: vista limitada")
 
-st.success("Plataforma operativa – Data Core v1.0")
+    if st.session_state.admin:
+        st.dataframe(campos, use_container_width=True)
+        st.success("Acceso administrador – datos completos")
+    else:
+        st.dataframe(campos.head(3), use_container_width=True)
+        st.info("Modo freemium: vista limitada")
+
+st.success("Data Core v1.0 operativo – listo para escalar 🚀")
