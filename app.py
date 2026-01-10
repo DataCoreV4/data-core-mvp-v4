@@ -1,184 +1,233 @@
 import streamlit as st
 import pandas as pd
-import unicodedata
+import hashlib
 import os
 
-# =================================================
-# CONFIGURACIÓN
-# =================================================
+# ===============================
+# CONFIGURACIÓN GENERAL
+# ===============================
 st.set_page_config(
-    page_title="Data Core | Inteligencia Agroexportadora",
+    page_title="Data Core – Inteligencia Agroexportadora",
     layout="wide"
 )
 
-# =================================================
-# LOGIN
-# =================================================
-def login():
-    st.title("🔐 Acceso a Data Core")
-    usuario = st.text_input("Usuario")
-    password = st.text_input("Contraseña", type="password")
+# ===============================
+# FUNCIONES DE USUARIOS
+# ===============================
+USERS_FILE = "usuarios.csv"
 
-    if st.button("Ingresar"):
-        if usuario == "admin" and password == "datacore123":
-            st.session_state["auth"] = True
-            st.success("Acceso correcto")
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def cargar_usuarios():
+    if os.path.exists(USERS_FILE):
+        return pd.read_csv(USERS_FILE)
+    else:
+        return pd.DataFrame(columns=[
+            "nombre", "apellido", "dni", "correo", "celular",
+            "empresa", "cargo", "password"
+        ])
+
+def guardar_usuario(data):
+    usuarios = cargar_usuarios()
+    usuarios = pd.concat([usuarios, pd.DataFrame([data])], ignore_index=True)
+    usuarios.to_csv(USERS_FILE, index=False)
+
+def correo_existe(correo):
+    usuarios = cargar_usuarios()
+    return correo in usuarios["correo"].values
+
+def validar_login(correo, password):
+    usuarios = cargar_usuarios()
+    pwd_hash = hash_password(password)
+    user = usuarios[
+        (usuarios["correo"] == correo) &
+        (usuarios["password"] == pwd_hash)
+    ]
+    return not user.empty
+
+# ===============================
+# SESIÓN
+# ===============================
+if "login" not in st.session_state:
+    st.session_state.login = False
+
+# ===============================
+# PORTADA / LOGIN / REGISTRO
+# ===============================
+if not st.session_state.login:
+
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        if os.path.exists("logo_datacore.png"):
+            st.image("logo_datacore.png", width=250)
+
+        st.title("🌱 Data Core")
+        st.subheader("Plataforma de inteligencia agroexportadora")
+        st.markdown(
+            "Análisis de datos reales de **certificaciones, inspecciones y envíos** "
+            "para la toma de decisiones estratégicas."
+        )
+
+        opcion = st.radio("Acceso", ["Iniciar sesión", "Registrarse"])
+
+        # -------- LOGIN --------
+        if opcion == "Iniciar sesión":
+            correo = st.text_input("Correo electrónico")
+            password = st.text_input("Contraseña", type="password")
+
+            if st.button("Ingresar"):
+                if validar_login(correo, password):
+                    st.session_state.login = True
+                    st.session_state.usuario = correo
+                    st.success("Acceso correcto")
+                    st.rerun()
+                else:
+                    st.error("Correo o contraseña incorrectos")
+
+        # -------- REGISTRO --------
         else:
-            st.error("Usuario o contraseña incorrectos")
+            st.markdown("### Registro de usuario")
 
-if "auth" not in st.session_state:
-    login()
+            nombre = st.text_input("Nombre")
+            apellido = st.text_input("Apellido")
+            dni = st.text_input("DNI")
+            correo = st.text_input("Correo electrónico")
+            celular = st.text_input("Celular")
+            empresa = st.text_input("Empresa (opcional)")
+            cargo = st.text_input("Cargo (opcional)")
+            password = st.text_input("Contraseña", type="password")
+            password2 = st.text_input("Repetir contraseña", type="password")
+
+            if st.button("Registrarse"):
+                if correo_existe(correo):
+                    st.error("Este correo ya está registrado")
+                elif password != password2:
+                    st.error("Las contraseñas no coinciden")
+                elif not nombre or not apellido or not dni or not correo:
+                    st.error("Complete los campos obligatorios")
+                else:
+                    guardar_usuario({
+                        "nombre": nombre,
+                        "apellido": apellido,
+                        "dni": dni,
+                        "correo": correo,
+                        "celular": celular,
+                        "empresa": empresa,
+                        "cargo": cargo,
+                        "password": hash_password(password)
+                    })
+                    st.success("Registro exitoso. Ahora puede iniciar sesión.")
+
     st.stop()
 
-if not st.session_state.get("auth", False):
-    st.stop()
+# ===============================
+# DASHBOARD (USUARIO LOGUEADO)
+# ===============================
+st.sidebar.image("logo_datacore.png", width=180)
+st.sidebar.markdown(f"👤 Usuario: **{st.session_state.usuario}**")
+st.sidebar.info("Modo: Freemium")
 
-# =================================================
-# FUNCIONES
-# =================================================
-def normalizar(texto):
-    texto = str(texto).strip().lower()
-    texto = unicodedata.normalize("NFKD", texto)
-    texto = texto.encode("ascii", "ignore").decode("utf-8")
-    texto = texto.replace(" ", "_").replace(".", "")
-    return texto
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state.login = False
+    st.rerun()
 
-def detectar_columna(df, claves):
-    for c in df.columns:
-        for k in claves:
-            if k in c:
-                return c
-    return None
+st.title("📊 Data Core – Dashboard")
 
-# =================================================
-# CARGA ENVÍOS
-# =================================================
+# ===============================
+# CARGA DE DATOS
+# ===============================
 @st.cache_data
 def cargar_envios():
-    archivos = {
-        "limon": "datos_reales.csv",
-        "arandano": "data_arandano_1_6.csv"
-    }
-
     dfs = []
-    for producto, archivo in archivos.items():
-        if not os.path.exists(archivo):
-            continue
-
-        df = pd.read_csv(
-            archivo,
-            sep=";",
-            encoding="latin1",
-            on_bad_lines="skip"
-        )
-        df.columns = [normalizar(c) for c in df.columns]
-        df["producto"] = producto
-        dfs.append(df)
-
-    return pd.concat(dfs, ignore_index=True)
-
-envios = cargar_envios()
-
-# =================================================
-# CARGA CAMPO
-# =================================================
-@st.cache_data
-def cargar_campo():
-    archivos = {
-        "limon": "data_campo_limon_2025.csv",
-        "arandano": "data_campo_arandano_2025.csv"
-    }
-
-    dfs = []
-    for producto, archivo in archivos.items():
-        if not os.path.exists(archivo):
-            continue
-
-        df = pd.read_csv(
-            archivo,
-            sep=";",
-            encoding="latin1",
-            on_bad_lines="skip"
-        )
-        df.columns = [normalizar(c) for c in df.columns]
-        df["producto"] = producto
-        dfs.append(df)
-
+    if os.path.exists("datos_reales.csv"):
+        dfs.append(pd.read_csv("datos_reales.csv", low_memory=False))
+    if os.path.exists("data_arandano_1_6.csv"):
+        dfs.append(pd.read_csv("data_arandano_1_6.csv", low_memory=False))
     if dfs:
-        return pd.concat(dfs, ignore_index=True)
+        df = pd.concat(dfs, ignore_index=True)
+        df.columns = df.columns.str.lower()
+        return df
     return pd.DataFrame()
 
-campo = cargar_campo()
+@st.cache_data
+def cargar_campos():
+    dfs = []
+    if os.path.exists("data_campo_limon_2025.csv"):
+        dfs.append(pd.read_csv("data_campo_limon_2025.csv", low_memory=False))
+    if os.path.exists("data_campo_arandano_2025.csv"):
+        dfs.append(pd.read_csv("data_campo_arandano_2025.csv", low_memory=False))
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+        df.columns = df.columns.str.lower()
+        return df
+    return pd.DataFrame()
 
-# =================================================
-# INTERFAZ PRINCIPAL
-# =================================================
-st.title("🌱 Data Core – Plataforma de Inteligencia Agroexportadora")
-st.write(
-    "MVP funcional para visualización de envíos agroexportadores "
-    "y campos de producción certificados."
-)
+envios = cargar_envios()
+campos = cargar_campos()
 
-# =================================================
-# SIDEBAR – FILTROS
-# =================================================
-st.sidebar.header("🔍 Filtros")
+if envios.empty:
+    st.error("No se cargaron datos de envíos")
+    st.stop()
 
-producto_sel = st.sidebar.selectbox(
-    "Producto",
-    sorted(envios["producto"].unique())
-)
+# ===============================
+# FILTROS
+# ===============================
+st.subheader("🔎 Filtros")
 
-envios_p = envios[envios["producto"] == producto_sel]
-campo_p = campo[campo["producto"] == producto_sel]
+colf1, colf2, colf3, colf4 = st.columns(4)
 
-# Filtro país destino
-col_pais = detectar_columna(envios_p, ["pais_destino"])
+with colf1:
+    producto = st.selectbox(
+        "Producto",
+        sorted(envios["producto"].dropna().unique())
+    )
 
-if col_pais:
-    paises = sorted(envios_p[col_pais].dropna().astype(str).unique())
-    pais_sel = st.sidebar.selectbox(
-        "País de destino",
+dfp = envios[envios["producto"] == producto]
+
+with colf2:
+    if "aao_inspeccia3n" in dfp.columns:
+        anio = st.selectbox(
+            "Año",
+            sorted(dfp["aao_inspeccia3n"].dropna().unique())
+        )
+        dfp = dfp[dfp["aao_inspeccia3n"] == anio]
+
+with colf3:
+    if "mes_inspeccia3n" in dfp.columns:
+        mes = st.selectbox(
+            "Mes",
+            sorted(dfp["mes_inspeccia3n"].dropna().unique())
+        )
+        dfp = dfp[dfp["mes_inspeccia3n"] == mes]
+
+with colf4:
+    paises = sorted(dfp["pais_destino"].dropna().unique())
+    pais = st.selectbox(
+        "País destino",
         ["Todos"] + paises
     )
-    if pais_sel != "Todos":
-        envios_p = envios_p[envios_p[col_pais].astype(str) == pais_sel]
+    if pais != "Todos":
+        dfp = dfp[dfp["pais_destino"] == pais]
 
-# =================================================
-# MÉTRICAS RESUMEN
-# =================================================
-c1, c2 = st.columns(2)
-c1.metric("📦 Total de envíos", len(envios_p))
-c2.metric("🌾 Campos certificados", len(campo_p))
-
-# =================================================
-# TABLA ENVÍOS
-# =================================================
+# ===============================
+# RESULTADOS
+# ===============================
 st.subheader("📦 Envíos registrados")
-st.dataframe(
-    envios_p,
-    use_container_width=True,
-    height=350
-)
 
-# =================================================
-# TABLA CAMPO
-# =================================================
-st.subheader("🌾 Campos de producción certificados")
-if not campo_p.empty:
-    st.dataframe(
-        campo_p,
-        use_container_width=True,
-        height=350
-    )
-else:
-    st.info("No hay datos de campo disponibles para este producto.")
+st.metric("Total de envíos", len(dfp))
 
-# =================================================
-# MENSAJE FINAL
-# =================================================
-st.info(
-    "Data Core integra información de envíos agroexportadores y campos "
-    "de producción certificados, permitiendo análisis por producto y "
-    "país de destino como base para inteligencia comercial y trazabilidad."
-)
+st.dataframe(dfp.head(3), use_container_width=True)
+
+st.info("Modo freemium: solo se muestran las 3 primeras filas")
+
+# ===============================
+# CAMPOS CERTIFICADOS
+# ===============================
+if not campos.empty:
+    st.subheader("🌾 Campos certificados")
+    st.metric("Total de campos registrados", campos.shape[0])
+    st.dataframe(campos.head(3), use_container_width=True)
+    st.info("Modo freemium: vista limitada")
+
+st.success("Plataforma operativa – Data Core v1.0")
