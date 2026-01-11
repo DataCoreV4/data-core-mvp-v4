@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import hashlib
-from datetime import datetime
 
 # =========================
 # CONFIG
@@ -14,24 +13,9 @@ ADMIN_PASS = "admin123"
 
 LOGO = "logo_datacore.jpg"
 USERS_FILE = "users.csv"
-SUBS_FILE = "subscriptions.csv"
 
 SHIPMENT_FILES = ["datos_reales.csv","data_arandano_1_6.csv","data.csv"]
 FIELD_FILES = ["data_campo_limon_2025.csv","data_campo_arandano_2025.csv"]
-
-# =========================
-# PRICING (editable)
-# =========================
-PRICES = {
-    "shipments": {
-        "LIMON": 130,
-        "ARANDANO": 180
-    },
-    "fields": {
-        "LIMON": {"month":100,"year":800},
-        "ARANDANO": {"month":120,"year":900}
-    }
-}
 
 # =========================
 # UTILS
@@ -48,27 +32,11 @@ def smart_read_csv(file):
 def load_users():
     if os.path.exists(USERS_FILE):
         return pd.read_csv(USERS_FILE)
-    return pd.DataFrame(columns=["user","password","role","name","lastname","dni","email","phone","company","position"])
-
-def load_subs():
-    if os.path.exists(SUBS_FILE):
-        return pd.read_csv(SUBS_FILE)
-    return pd.DataFrame(columns=["user","module","product","period_type","period_value","start","end"])
-
-def save_sub(row):
-    subs = load_subs()
-    subs.loc[len(subs)] = row
-    subs.to_csv(SUBS_FILE, index=False)
-
-def has_access(user, module, product, period):
-    subs = load_subs()
-    match = subs[
-        (subs.user == user) &
-        (subs.module == module) &
-        (subs.product == product) &
-        (subs.period_value == period)
-    ]
-    return not match.empty
+    return pd.DataFrame(columns=[
+        "user","password","role",
+        "name","lastname","dni",
+        "email","phone","company","position"
+    ])
 
 # =========================
 # SESSION
@@ -90,8 +58,8 @@ def auth():
     tab1, tab2 = st.tabs(["Login","Register"])
 
     with tab1:
-        u = st.text_input("User", key="l_user")
-        p = st.text_input("Password", type="password", key="l_pass")
+        u = st.text_input("User", key="login_user")
+        p = st.text_input("Password", type="password", key="login_pass")
 
         if st.button("Login"):
             if u == ADMIN_USER and p == ADMIN_PASS:
@@ -123,12 +91,16 @@ def auth():
         p2 = st.text_input("Repeat password", type="password")
 
         if st.button("Register"):
-            if p1!=p2:
+            if p1 != p2:
                 st.error("Passwords do not match")
             else:
                 users = load_users()
-                users.loc[len(users)] = [user,hash_pass(p1),"freemium",name,lastname,dni,email,phone,company,position]
-                users.to_csv(USERS_FILE,index=False)
+                users.loc[len(users)] = [
+                    user, hash_pass(p1), "freemium",
+                    name, lastname, dni,
+                    email, phone, company, position
+                ]
+                users.to_csv(USERS_FILE, index=False)
                 st.success("Registered successfully")
 
 if not st.session_state.logged:
@@ -140,12 +112,11 @@ if not st.session_state.logged:
 # =========================
 @st.cache_data
 def load_data(files):
-    dfs=[]
+    dfs = []
     for f in files:
         if os.path.exists(f):
-            df=smart_read_csv(f)
-            dfs.append(df)
-    return pd.concat(dfs,ignore_index=True) if dfs else pd.DataFrame()
+            dfs.append(smart_read_csv(f))
+    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
 
 shipments = load_data(SHIPMENT_FILES)
 fields = load_data(FIELD_FILES)
@@ -160,9 +131,9 @@ st.sidebar.write(f"User: **{st.session_state.user}**")
 st.sidebar.write(f"Role: **{st.session_state.role}**")
 
 if st.sidebar.button("Logout"):
-    st.session_state.logged=False
-    st.session_state.role=None
-    st.session_state.user=None
+    st.session_state.logged = False
+    st.session_state.role = None
+    st.session_state.user = None
     st.rerun()
 
 # =========================
@@ -179,26 +150,43 @@ col_product = next(c for c in shipments.columns if "producto" in c.lower())
 col_country = next(c for c in shipments.columns if "pais destino" in c.lower())
 col_year = next(c for c in shipments.columns if "año inspe" in c.lower() or "aao_inspeccia3n" in c.lower())
 
-product = st.selectbox("Product", sorted(shipments[col_product].unique()))
-year = st.selectbox("Inspection year", sorted(shipments[col_year].unique()))
+products = sorted(
+    shipments[col_product]
+    .dropna()
+    .astype(str)
+    .unique()
+)
 
-period = f"{year}"
+years = sorted(
+    shipments[col_year]
+    .dropna()
+    .astype(str)
+    .unique()
+)
 
-if st.session_state.role!="admin" and not has_access(st.session_state.user,"shipments",product,period):
-    st.warning(f"No active subscription for {product} – Shipments – {year}")
+product = st.selectbox("Product", products)
+year = st.selectbox("Inspection year", years)
+
+filtered = shipments[
+    (shipments[col_product].astype(str) == product) &
+    (shipments[col_year].astype(str) == year)
+]
+
+st.metric("Total shipments", len(filtered))
+
+if st.session_state.role == "admin":
+    st.dataframe(filtered)
 else:
-    df = shipments[(shipments[col_product]==product)&(shipments[col_year]==year)]
-    st.metric("Total shipments", len(df))
-    st.dataframe(df if st.session_state.role=="admin" else df.head(3))
+    st.dataframe(filtered.head(3))
 
 # =========================
 # FIELDS
 # =========================
 st.subheader("🌾 Certified Fields")
 
-if st.session_state.role!="admin":
-    st.info("Fields module requires separate subscription")
+if st.session_state.role == "admin":
+    st.dataframe(fields)
+else:
+    st.dataframe(fields.head(3))
 
-st.dataframe(fields if st.session_state.role=="admin" else fields.head(3))
-
-st.success("✅ Data Core – Subscription model active (MVP)")
+st.success("✅ Data Core v1.0 – stable and operational")
