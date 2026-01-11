@@ -3,29 +3,29 @@ import pandas as pd
 import hashlib
 import os
 
-# ===============================
+# =====================================================
 # CONFIGURACIÓN GENERAL
-# ===============================
+# =====================================================
 st.set_page_config(
     page_title="Data Core – Inteligencia Agroexportadora",
     layout="wide"
 )
 
-# ===============================
-# FUNCIONES DE SEGURIDAD
-# ===============================
-def hash_password(password):
+# =====================================================
+# UTILIDADES
+# =====================================================
+def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
 
-# ===============================
-# CONFIGURACIÓN ADMIN
-# ===============================
+# =====================================================
+# CONFIG ADMIN
+# =====================================================
 ADMIN_EMAIL = "admin@datacore.pe"
 ADMIN_PASSWORD = hash_password("Admin2025!")
 
-# ===============================
+# =====================================================
 # USUARIOS
-# ===============================
+# =====================================================
 USERS_FILE = "usuarios.csv"
 
 def cargar_usuarios():
@@ -62,22 +62,23 @@ def validar_login(correo, password):
 
     return False
 
-# ===============================
+# =====================================================
 # SESIÓN
-# ===============================
+# =====================================================
 if "login" not in st.session_state:
     st.session_state.login = False
 
 if "admin" not in st.session_state:
     st.session_state.admin = False
 
-# ===============================
+# =====================================================
 # PORTADA
-# ===============================
+# =====================================================
 if not st.session_state.login:
 
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
+
         if os.path.exists("logo_datacore.png"):
             try:
                 st.image("logo_datacore.png", width=260)
@@ -86,10 +87,6 @@ if not st.session_state.login:
 
         st.title("🌱 Data Core")
         st.subheader("Plataforma de inteligencia agroexportadora")
-        st.markdown(
-            "Análisis de **datos reales de certificaciones, inspecciones y exportaciones** "
-            "para decisiones estratégicas del sector agroexportador."
-        )
 
         opcion = st.radio("Acceso", ["Iniciar sesión", "Registrarse"])
 
@@ -113,3 +110,136 @@ if not st.session_state.login:
             dni = st.text_input("DNI")
             correo = st.text_input("Correo electrónico")
             celular = st.text_input("Celular")
+            empresa = st.text_input("Empresa (opcional)")
+            cargo = st.text_input("Cargo (opcional)")
+            p1 = st.text_input("Contraseña", type="password")
+            p2 = st.text_input("Repetir contraseña", type="password")
+
+            if st.button("Registrarse"):
+                if correo_existe(correo):
+                    st.error("Correo ya registrado")
+                elif p1 != p2:
+                    st.error("Las contraseñas no coinciden")
+                else:
+                    guardar_usuario({
+                        "nombre": nombre,
+                        "apellido": apellido,
+                        "dni": dni,
+                        "correo": correo,
+                        "celular": celular,
+                        "empresa": empresa,
+                        "cargo": cargo,
+                        "password": hash_password(p1)
+                    })
+                    st.success("Registro exitoso. Inicie sesión.")
+
+    st.stop()
+
+# =====================================================
+# SIDEBAR
+# =====================================================
+if os.path.exists("logo_datacore.png"):
+    try:
+        st.sidebar.image("logo_datacore.png", width=180)
+    except:
+        pass
+
+st.sidebar.markdown(f"👤 **{st.session_state.usuario}**")
+
+if st.session_state.admin:
+    st.sidebar.success("Administrador")
+else:
+    st.sidebar.info("Freemium")
+
+if st.sidebar.button("Cerrar sesión"):
+    st.session_state.login = False
+    st.session_state.admin = False
+    st.rerun()
+
+# =====================================================
+# DASHBOARD (SIEMPRE RENDERIZA)
+# =====================================================
+st.title("📊 Data Core – Dashboard")
+
+# =====================================================
+# CARGA DE DATOS (DEFENSIVA)
+# =====================================================
+@st.cache_data
+def cargar_envios():
+    archivos = ["datos_reales.csv", "data_arandano_1_6.csv"]
+    dfs = []
+    for f in archivos:
+        if os.path.exists(f):
+            try:
+                df = pd.read_csv(f, low_memory=False)
+                dfs.append(df)
+            except:
+                pass
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+        df.columns = df.columns.str.lower()
+        return df
+    return pd.DataFrame()
+
+@st.cache_data
+def cargar_campos():
+    archivos = ["data_campo_limon_2025.csv", "data_campo_arandano_2025.csv"]
+    dfs = []
+    for f in archivos:
+        if os.path.exists(f):
+            try:
+                df = pd.read_csv(f, low_memory=False)
+                dfs.append(df)
+            except:
+                pass
+    if dfs:
+        df = pd.concat(dfs, ignore_index=True)
+        df.columns = df.columns.str.lower()
+        return df
+    return pd.DataFrame()
+
+envios = cargar_envios()
+campos = cargar_campos()
+
+# =====================================================
+# SECCIÓN ENVÍOS
+# =====================================================
+st.subheader("📦 Envíos")
+
+if envios.empty:
+    st.warning("No hay datos de envíos cargados.")
+else:
+    if "producto" not in envios.columns:
+        st.error("La columna 'producto' no existe en los datos.")
+    else:
+        productos = sorted(envios["producto"].dropna().unique())
+
+        if not productos:
+            st.warning("No hay productos disponibles para mostrar.")
+        else:
+            producto = st.selectbox("Producto", productos)
+            dfp = envios[envios["producto"] == producto]
+
+            st.metric("Total de envíos", len(dfp))
+
+            if st.session_state.admin:
+                st.dataframe(dfp, use_container_width=True)
+            else:
+                st.dataframe(dfp.head(3), use_container_width=True)
+                st.info("Modo freemium – vista limitada")
+
+# =====================================================
+# SECCIÓN CAMPOS
+# =====================================================
+st.subheader("🌾 Campos certificados")
+
+if campos.empty:
+    st.warning("No hay datos de campos certificados.")
+else:
+    if st.session_state.admin:
+        st.dataframe(campos, use_container_width=True)
+    else:
+        st.dataframe(campos.head(3), use_container_width=True)
+        st.info("Modo freemium – vista limitada")
+
+st.success("✅ Data Core v1.0 – plataforma estable y operativa")
