@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import os
 import hashlib
+from datetime import datetime
 
 # =========================
-# CONFIGURACIÓN GENERAL
+# CONFIG
 # =========================
 st.set_page_config(page_title="Data Core", layout="wide")
 
@@ -13,20 +14,27 @@ ADMIN_PASS = "admin123"
 
 LOGO = "logo_datacore.jpg"
 USERS_FILE = "users.csv"
+SUBS_FILE = "subscriptions.csv"
 
-SHIPMENT_FILES = [
-    "datos_reales.csv",
-    "data_arandano_1_6.csv",
-    "data.csv"
-]
-
-FIELD_FILES = [
-    "data_campo_limon_2025.csv",
-    "data_campo_arandano_2025.csv"
-]
+SHIPMENT_FILES = ["datos_reales.csv","data_arandano_1_6.csv","data.csv"]
+FIELD_FILES = ["data_campo_limon_2025.csv","data_campo_arandano_2025.csv"]
 
 # =========================
-# UTILIDADES
+# PRICING (editable)
+# =========================
+PRICES = {
+    "shipments": {
+        "LIMON": 130,
+        "ARANDANO": 180
+    },
+    "fields": {
+        "LIMON": {"month":100,"year":800},
+        "ARANDANO": {"month":120,"year":900}
+    }
+}
+
+# =========================
+# UTILS
 # =========================
 def hash_pass(text):
     return hashlib.sha256(text.encode()).hexdigest()
@@ -40,111 +48,104 @@ def smart_read_csv(file):
 def load_users():
     if os.path.exists(USERS_FILE):
         return pd.read_csv(USERS_FILE)
-    return pd.DataFrame(columns=[
-        "user","password","role","name","lastname","dni",
-        "email","phone","company","position"
-    ])
+    return pd.DataFrame(columns=["user","password","role","name","lastname","dni","email","phone","company","position"])
 
-def save_user(data):
-    users = load_users()
-    users.loc[len(users)] = data
-    users.to_csv(USERS_FILE, index=False)
+def load_subs():
+    if os.path.exists(SUBS_FILE):
+        return pd.read_csv(SUBS_FILE)
+    return pd.DataFrame(columns=["user","module","product","period_type","period_value","start","end"])
+
+def save_sub(row):
+    subs = load_subs()
+    subs.loc[len(subs)] = row
+    subs.to_csv(SUBS_FILE, index=False)
+
+def has_access(user, module, product, period):
+    subs = load_subs()
+    match = subs[
+        (subs.user == user) &
+        (subs.module == module) &
+        (subs.product == product) &
+        (subs.period_value == period)
+    ]
+    return not match.empty
 
 # =========================
-# SESIÓN
+# SESSION
 # =========================
 if "logged" not in st.session_state:
     st.session_state.logged = False
 if "role" not in st.session_state:
     st.session_state.role = None
+if "user" not in st.session_state:
+    st.session_state.user = None
 
 # =========================
-# LOGIN / REGISTRO
+# AUTH
 # =========================
-def auth_screen():
+def auth():
     if os.path.exists(LOGO):
-        st.image(LOGO, width=180)
+        st.image(LOGO, width=160)
 
-    st.title("🌱 Data Core")
-    st.subheader("Agroexport Intelligence Platform")
+    tab1, tab2 = st.tabs(["Login","Register"])
 
-    tab_login, tab_register = st.tabs(["Login", "Register"])
+    with tab1:
+        u = st.text_input("User", key="l_user")
+        p = st.text_input("Password", type="password", key="l_pass")
 
-    # ---------- LOGIN ----------
-    with tab_login:
-        user = st.text_input("User", key="login_user")
-        pwd = st.text_input("Password", type="password", key="login_pass")
-
-        if st.button("Login", key="login_btn"):
-            if user == ADMIN_USER and pwd == ADMIN_PASS:
+        if st.button("Login"):
+            if u == ADMIN_USER and p == ADMIN_PASS:
                 st.session_state.logged = True
                 st.session_state.role = "admin"
+                st.session_state.user = u
                 st.rerun()
 
             users = load_users()
-            row = users[
-                (users.user == user) &
-                (users.password == hash_pass(pwd))
-            ]
-
+            row = users[(users.user==u)&(users.password==hash_pass(p))]
             if not row.empty:
                 st.session_state.logged = True
                 st.session_state.role = row.iloc[0]["role"]
+                st.session_state.user = u
                 st.rerun()
             else:
                 st.error("Invalid credentials")
 
-    # ---------- REGISTRO ----------
-    with tab_register:
-        name = st.text_input("Name", key="reg_name")
-        lastname = st.text_input("Last name", key="reg_lastname")
-        dni = st.text_input("DNI", key="reg_dni")
-        email = st.text_input("Email", key="reg_email")
-        phone = st.text_input("Phone", key="reg_phone")
-        company = st.text_input("Company (optional)", key="reg_company")
-        position = st.text_input("Position (optional)", key="reg_position")
-        user = st.text_input("User ID", key="reg_user")
-        pwd1 = st.text_input("Password", type="password", key="reg_pass1")
-        pwd2 = st.text_input("Repeat password", type="password", key="reg_pass2")
+    with tab2:
+        name = st.text_input("Name")
+        lastname = st.text_input("Last name")
+        dni = st.text_input("DNI")
+        email = st.text_input("Email")
+        phone = st.text_input("Phone")
+        company = st.text_input("Company (optional)")
+        position = st.text_input("Position (optional)")
+        user = st.text_input("User ID")
+        p1 = st.text_input("Password", type="password")
+        p2 = st.text_input("Repeat password", type="password")
 
-        if st.button("Register", key="reg_btn"):
-            if pwd1 != pwd2:
+        if st.button("Register"):
+            if p1!=p2:
                 st.error("Passwords do not match")
-            elif user == "" or email == "":
-                st.error("User and email are required")
             else:
-                save_user([
-                    user,
-                    hash_pass(pwd1),
-                    "freemium",
-                    name,
-                    lastname,
-                    dni,
-                    email,
-                    phone,
-                    company,
-                    position
-                ])
-                st.success("Registration successful. Please login.")
+                users = load_users()
+                users.loc[len(users)] = [user,hash_pass(p1),"freemium",name,lastname,dni,email,phone,company,position]
+                users.to_csv(USERS_FILE,index=False)
+                st.success("Registered successfully")
 
 if not st.session_state.logged:
-    auth_screen()
+    auth()
     st.stop()
 
 # =========================
-# CARGA DE DATOS
+# LOAD DATA
 # =========================
 @st.cache_data
 def load_data(files):
-    dfs = []
+    dfs=[]
     for f in files:
         if os.path.exists(f):
-            df = smart_read_csv(f)
-            df["__source"] = f
+            df=smart_read_csv(f)
             dfs.append(df)
-    if dfs:
-        return pd.concat(dfs, ignore_index=True)
-    return pd.DataFrame()
+    return pd.concat(dfs,ignore_index=True) if dfs else pd.DataFrame()
 
 shipments = load_data(SHIPMENT_FILES)
 fields = load_data(FIELD_FILES)
@@ -153,13 +154,15 @@ fields = load_data(FIELD_FILES)
 # SIDEBAR
 # =========================
 if os.path.exists(LOGO):
-    st.sidebar.image(LOGO, width=140)
+    st.sidebar.image(LOGO, width=130)
 
-st.sidebar.success(f"Role: {st.session_state.role}")
+st.sidebar.write(f"User: **{st.session_state.user}**")
+st.sidebar.write(f"Role: **{st.session_state.role}**")
 
 if st.sidebar.button("Logout"):
-    st.session_state.logged = False
-    st.session_state.role = None
+    st.session_state.logged=False
+    st.session_state.role=None
+    st.session_state.user=None
     st.rerun()
 
 # =========================
@@ -168,58 +171,34 @@ if st.sidebar.button("Logout"):
 st.title("📊 Data Core – Dashboard")
 
 # =========================
-# ENVÍOS
+# SHIPMENTS
 # =========================
 st.subheader("📦 Shipments")
 
-if shipments.empty:
-    st.error("No shipment data loaded")
+col_product = next(c for c in shipments.columns if "producto" in c.lower())
+col_country = next(c for c in shipments.columns if "pais destino" in c.lower())
+col_year = next(c for c in shipments.columns if "año inspe" in c.lower() or "aao_inspeccia3n" in c.lower())
+
+product = st.selectbox("Product", sorted(shipments[col_product].unique()))
+year = st.selectbox("Inspection year", sorted(shipments[col_year].unique()))
+
+period = f"{year}"
+
+if st.session_state.role!="admin" and not has_access(st.session_state.user,"shipments",product,period):
+    st.warning(f"No active subscription for {product} – Shipments – {year}")
 else:
-    st.success(f"Shipments loaded: {len(shipments)}")
-
-    col_product = next((c for c in shipments.columns if "producto" in c.lower()), None)
-    col_country = next((c for c in shipments.columns if "pais destino" in c.lower()), None)
-    col_year = next((c for c in shipments.columns if "año inspe" in c.lower() or "aao_inspeccia3n" in c.lower()), None)
-
-    if not col_product:
-        st.error("Product column not found")
-    else:
-        product = st.selectbox("Product", sorted(shipments[col_product].dropna().unique()))
-
-        df = shipments[shipments[col_product] == product]
-
-        if col_country:
-            country = st.selectbox("Destination country", ["All"] + sorted(df[col_country].dropna().unique()))
-            if country != "All":
-                df = df[df[col_country] == country]
-
-        if col_year:
-            year = st.selectbox("Inspection year", ["All"] + sorted(df[col_year].dropna().unique()))
-            if year != "All":
-                df = df[df[col_year] == year]
-
-        st.metric("Total shipments", len(df))
-
-        if st.session_state.role == "admin":
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.dataframe(df.head(3), use_container_width=True)
-            st.info("Freemium view – limited data")
+    df = shipments[(shipments[col_product]==product)&(shipments[col_year]==year)]
+    st.metric("Total shipments", len(df))
+    st.dataframe(df if st.session_state.role=="admin" else df.head(3))
 
 # =========================
-# CAMPOS
+# FIELDS
 # =========================
 st.subheader("🌾 Certified Fields")
 
-if fields.empty:
-    st.error("No field data loaded")
-else:
-    st.success(f"Fields loaded: {len(fields)}")
+if st.session_state.role!="admin":
+    st.info("Fields module requires separate subscription")
 
-    if st.session_state.role == "admin":
-        st.dataframe(fields, use_container_width=True)
-    else:
-        st.dataframe(fields.head(3), use_container_width=True)
-        st.info("Freemium view – limited data")
+st.dataframe(fields if st.session_state.role=="admin" else fields.head(3))
 
-st.success("✅ Data Core MVP – stable and functional")
+st.success("✅ Data Core – Subscription model active (MVP)")
