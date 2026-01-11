@@ -17,10 +17,6 @@ MAIL_TO = "datacore.agrotech@gmail.com"
 # FUNCIONES AUXILIARES
 # ==================================================
 def load_csv(file):
-    """
-    Carga CSV robusta:
-    - Intenta ; luego ,
-    """
     if not os.path.exists(file):
         return pd.DataFrame()
 
@@ -39,9 +35,6 @@ def limit_rows(df, is_admin):
 
 
 def find_col(df, keywords):
-    """
-    keywords: string o lista de strings
-    """
     if isinstance(keywords, str):
         keywords = [keywords]
 
@@ -119,8 +112,8 @@ shipments = pd.concat(
 
 campo = pd.concat(
     [
-        load_csv("datos_campo_limon_2025.csv"),
-        load_csv("datos_campo_arandano_2025.csv"),
+        load_csv("data_campo_limon_2025.csv"),
+        load_csv("data_campo_arandano_2025.csv"),
     ],
     ignore_index=True
 )
@@ -151,17 +144,11 @@ else:
     df_ship = shipments[shipments[col_product] == product]
 
     if col_year:
-        year = st.selectbox(
-            "Year",
-            sorted(df_ship[col_year].dropna().unique())
-        )
+        year = st.selectbox("Year", sorted(df_ship[col_year].dropna().unique()))
         df_ship = df_ship[df_ship[col_year] == year]
 
     if col_month:
-        month = st.selectbox(
-            "Month",
-            sorted(df_ship[col_month].dropna().unique())
-        )
+        month = st.selectbox("Month", sorted(df_ship[col_month].dropna().unique()))
         df_ship = df_ship[df_ship[col_month] == month]
 
     if col_country:
@@ -182,47 +169,36 @@ else:
         )
 
 # ==================================================
-# CAMPOS CERTIFICADOS
+# CAMPOS CERTIFICADOS (SOLUCIÓN DEFINITIVA)
 # ==================================================
 st.header("🌾 Certified Fields")
 
 if campo.empty:
     st.warning("No field data loaded.")
 else:
-    # AQUÍ ESTABA EL PROBLEMA: ahora es robusto
-    col_prod_campo = find_col(
+    st.markdown("🧩 **Detected field columns (diagnostic)**")
+    st.code(list(campo.columns))
+
+    # Intentar detectar una columna de cultivo / producto
+    col_cultivo = find_col(
         campo,
-        ["producto", "cultivo", "descrip", "cientifico"]
+        ["cultivo", "producto", "cientifico", "descrip"]
     )
 
-    col_year_campo = find_col(campo, "año")
-    col_month_campo = find_col(campo, "mes")
+    df_campo = campo.copy()
 
-    product_campo = st.selectbox(
-        "Product (Fields)",
-        sorted(campo[col_prod_campo].dropna().unique())
-    )
-
-    df_campo = campo[campo[col_prod_campo] == product_campo]
-
-    if col_year_campo:
-        year_c = st.selectbox(
-            "Year (Fields)",
-            sorted(df_campo[col_year_campo].dropna().unique())
+    if col_cultivo:
+        cultivo = st.selectbox(
+            "Filter by crop (optional)",
+            ["All"] + sorted(df_campo[col_cultivo].dropna().unique())
         )
-        df_campo = df_campo[df_campo[col_year_campo] == year_c]
-
-    if col_month_campo:
-        month_c = st.selectbox(
-            "Month (Fields)",
-            sorted(df_campo[col_month_campo].dropna().unique())
-        )
-        df_campo = df_campo[df_campo[col_month_campo] == month_c]
+        if cultivo != "All":
+            df_campo = df_campo[df_campo[col_cultivo] == cultivo]
 
     st.dataframe(limit_rows(df_campo, is_admin))
 
     if not is_admin:
-        mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Campos – {product_campo}"
+        mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Campos Certificados"
         st.markdown(
             f"🔓 **Acceso completo:** <a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
             unsafe_allow_html=True
