@@ -18,9 +18,8 @@ MAIL_TO = "datacore.agrotech@gmail.com"
 # ==================================================
 def load_csv(file):
     """
-    Carga CSV de forma robusta:
-    - Intenta con ';'
-    - Si queda en 1 columna, reintenta con ','
+    Carga CSV robusta:
+    - Intenta ; luego ,
     """
     if not os.path.exists(file):
         return pd.DataFrame()
@@ -39,10 +38,17 @@ def limit_rows(df, is_admin):
     return df if is_admin else df.head(3)
 
 
-def find_col(df, keyword):
-    for c in df.columns:
-        if keyword.lower() in c.lower():
-            return c
+def find_col(df, keywords):
+    """
+    keywords: string o lista de strings
+    """
+    if isinstance(keywords, str):
+        keywords = [keywords]
+
+    for key in keywords:
+        for c in df.columns:
+            if key.lower() in c.lower():
+                return c
     return None
 
 # ==================================================
@@ -103,7 +109,6 @@ with st.sidebar:
 # ==================================================
 # CARGA DE DATOS
 # ==================================================
-# Envíos
 shipments = pd.concat(
     [
         load_csv("datos_reales.csv"),
@@ -112,7 +117,6 @@ shipments = pd.concat(
     ignore_index=True
 )
 
-# Campos certificados
 campo = pd.concat(
     [
         load_csv("datos_campo_limon_2025.csv"),
@@ -127,7 +131,7 @@ campo = pd.concat(
 st.title("📊 Data Core – Dashboard")
 
 # ==================================================
-# SECCIÓN ENVÍOS
+# ENVÍOS
 # ==================================================
 st.header("📦 Shipments")
 
@@ -173,20 +177,26 @@ else:
     if not is_admin:
         mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Envíos – {product}"
         st.markdown(
-            f"🔓 **Acceso completo:** "
-            f"<a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
+            f"🔓 **Acceso completo:** <a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
             unsafe_allow_html=True
         )
 
 # ==================================================
-# SECCIÓN CAMPOS CERTIFICADOS
+# CAMPOS CERTIFICADOS
 # ==================================================
 st.header("🌾 Certified Fields")
 
 if campo.empty:
     st.warning("No field data loaded.")
 else:
-    col_prod_campo = find_col(campo, "producto")
+    # AQUÍ ESTABA EL PROBLEMA: ahora es robusto
+    col_prod_campo = find_col(
+        campo,
+        ["producto", "cultivo", "descrip", "cientifico"]
+    )
+
+    col_year_campo = find_col(campo, "año")
+    col_month_campo = find_col(campo, "mes")
 
     product_campo = st.selectbox(
         "Product (Fields)",
@@ -195,13 +205,26 @@ else:
 
     df_campo = campo[campo[col_prod_campo] == product_campo]
 
+    if col_year_campo:
+        year_c = st.selectbox(
+            "Year (Fields)",
+            sorted(df_campo[col_year_campo].dropna().unique())
+        )
+        df_campo = df_campo[df_campo[col_year_campo] == year_c]
+
+    if col_month_campo:
+        month_c = st.selectbox(
+            "Month (Fields)",
+            sorted(df_campo[col_month_campo].dropna().unique())
+        )
+        df_campo = df_campo[df_campo[col_month_campo] == month_c]
+
     st.dataframe(limit_rows(df_campo, is_admin))
 
     if not is_admin:
         mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Campos – {product_campo}"
         st.markdown(
-            f"🔓 **Acceso completo:** "
-            f"<a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
+            f"🔓 **Acceso completo:** <a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
             unsafe_allow_html=True
         )
 
