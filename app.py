@@ -25,8 +25,7 @@ def load_csv(file):
         if df.shape[1] == 1:
             df = pd.read_csv(file, sep=",", encoding="latin1", low_memory=False)
         return df
-    except Exception as e:
-        st.error(f"Error loading {file}: {e}")
+    except Exception:
         return pd.DataFrame()
 
 
@@ -128,9 +127,7 @@ st.title("📊 Data Core – Dashboard")
 # ==================================================
 st.header("📦 Shipments")
 
-if shipments.empty:
-    st.warning("No shipment data loaded.")
-else:
+if not shipments.empty:
     col_product = find_col(shipments, "producto")
     col_country = find_col(shipments, "pais")
     col_month = find_col(shipments, "mes")
@@ -162,45 +159,53 @@ else:
     st.dataframe(limit_rows(df_ship, is_admin))
 
     if not is_admin:
-        mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Envíos – {product}"
         st.markdown(
-            f"🔓 **Acceso completo:** <a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
+            f"🔓 **Acceso completo:** "
+            f"<a href='mailto:{MAIL_TO}?subject=Solicitud Data Envíos – {product}' target='_blank'>"
+            f"Adquirir data completa aquí</a>",
             unsafe_allow_html=True
         )
 
 # ==================================================
-# CAMPOS CERTIFICADOS (SOLUCIÓN DEFINITIVA)
+# CAMPOS CERTIFICADOS
 # ==================================================
 st.header("🌾 Certified Fields")
 
-if campo.empty:
-    st.warning("No field data loaded.")
-else:
-    st.markdown("🧩 **Detected field columns (diagnostic)**")
-    st.code(list(campo.columns))
-
-    # Intentar detectar una columna de cultivo / producto
-    col_cultivo = find_col(
-        campo,
-        ["cultivo", "producto", "cientifico", "descrip"]
-    )
+if not campo.empty:
+    col_cultivo = find_col(campo, ["cultivo", "producto", "cientifico"])
+    col_year_c = find_col(campo, ["año certificacion", "año"])
+    col_month_c = find_col(campo, ["mes certificacion", "mes"])
 
     df_campo = campo.copy()
 
     if col_cultivo:
         cultivo = st.selectbox(
-            "Filter by crop (optional)",
-            ["All"] + sorted(df_campo[col_cultivo].dropna().unique())
+            "Crop / Product",
+            sorted(df_campo[col_cultivo].dropna().unique())
         )
-        if cultivo != "All":
-            df_campo = df_campo[df_campo[col_cultivo] == cultivo]
+        df_campo = df_campo[df_campo[col_cultivo] == cultivo]
+
+    if col_year_c:
+        year_c = st.selectbox(
+            "Certification Year",
+            sorted(df_campo[col_year_c].dropna().unique())
+        )
+        df_campo = df_campo[df_campo[col_year_c] == year_c]
+
+    if col_month_c:
+        month_c = st.selectbox(
+            "Certification Month",
+            sorted(df_campo[col_month_c].dropna().unique())
+        )
+        df_campo = df_campo[df_campo[col_month_c] == month_c]
 
     st.dataframe(limit_rows(df_campo, is_admin))
 
     if not is_admin:
-        mailto = f"mailto:{MAIL_TO}?subject=Solicitud Data Campos Certificados"
         st.markdown(
-            f"🔓 **Acceso completo:** <a href='{mailto}' target='_blank'>Adquirir data completa aquí</a>",
+            f"🔓 **Acceso completo:** "
+            f"<a href='mailto:{MAIL_TO}?subject=Solicitud Data Campos Certificados' target='_blank'>"
+            f"Adquirir data completa aquí</a>",
             unsafe_allow_html=True
         )
 
