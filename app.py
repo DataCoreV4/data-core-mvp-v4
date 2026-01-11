@@ -1,192 +1,195 @@
 import streamlit as st
 import pandas as pd
 import os
-import hashlib
+from datetime import datetime
 
-# =========================
+# --------------------------------------------------
 # CONFIG
-# =========================
+# --------------------------------------------------
 st.set_page_config(page_title="Data Core", layout="wide")
 
 ADMIN_USER = "admin"
 ADMIN_PASS = "admin123"
 
-LOGO = "logo_datacore.jpg"
-USERS_FILE = "users.csv"
+LOGO_PATH = "logo_datacore.jpg"
+MAIL_TO = "datacore.agrotech@gmail.com"
 
-SHIPMENT_FILES = ["datos_reales.csv","data_arandano_1_6.csv","data.csv"]
-FIELD_FILES = ["data_campo_limon_2025.csv","data_campo_arandano_2025.csv"]
+# --------------------------------------------------
+# UTILIDADES
+# --------------------------------------------------
+def load_csv_safe(file):
+    if os.path.exists(file):
+        return pd.read_csv(file, encoding="latin1", sep=";")
+    return None
 
-# =========================
-# UTILS
-# =========================
-def hash_pass(text):
-    return hashlib.sha256(text.encode()).hexdigest()
+def limit_df(df, is_admin):
+    if is_admin:
+        return df
+    return df.head(3)
 
-def smart_read_csv(file):
-    try:
-        return pd.read_csv(file, sep=";", encoding="utf-8-sig", on_bad_lines="skip")
-    except:
-        return pd.read_csv(file, sep=",", encoding="latin1", on_bad_lines="skip")
+# --------------------------------------------------
+# CARGA DE DATOS
+# --------------------------------------------------
+shipments_files = [
+    "datos_reales.csv",
+    "data_arandano_1_6.csv"
+]
 
-def load_users():
-    if os.path.exists(USERS_FILE):
-        return pd.read_csv(USERS_FILE)
-    return pd.DataFrame(columns=[
-        "user","password","role",
-        "name","lastname","dni",
-        "email","phone","company","position"
-    ])
+shipments = []
+for f in shipments_files:
+    df = load_csv_safe(f)
+    if df is not None:
+        df["__source_file"] = f
+        shipments.append(df)
 
-# =========================
-# SESSION
-# =========================
-if "logged" not in st.session_state:
-    st.session_state.logged = False
-if "role" not in st.session_state:
-    st.session_state.role = None
-if "user" not in st.session_state:
-    st.session_state.user = None
+shipments = pd.concat(shipments, ignore_index=True) if shipments else pd.DataFrame()
 
-# =========================
+campo_limon = load_csv_safe("datos_campo_limon_2025.csv")
+campo_arandano = load_csv_safe("datos_campo_arandano_2025.csv")
+
+# --------------------------------------------------
 # AUTH
-# =========================
-def auth():
-    if os.path.exists(LOGO):
-        st.image(LOGO, width=160)
+# --------------------------------------------------
+def auth_screen():
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=180)
 
-    tab1, tab2 = st.tabs(["Login","Register"])
+    st.title("Data Core – Agroexport Intelligence")
+
+    tab1, tab2 = st.tabs(["Login", "Register"])
 
     with tab1:
         u = st.text_input("User", key="login_user")
         p = st.text_input("Password", type="password", key="login_pass")
-
         if st.button("Login"):
             if u == ADMIN_USER and p == ADMIN_PASS:
-                st.session_state.logged = True
+                st.session_state.user = u
                 st.session_state.role = "admin"
+            elif u:
                 st.session_state.user = u
-                st.rerun()
-
-            users = load_users()
-            row = users[(users.user==u)&(users.password==hash_pass(p))]
-            if not row.empty:
-                st.session_state.logged = True
-                st.session_state.role = row.iloc[0]["role"]
-                st.session_state.user = u
-                st.rerun()
-            else:
-                st.error("Invalid credentials")
+                st.session_state.role = "freemium"
 
     with tab2:
-        name = st.text_input("Name")
-        lastname = st.text_input("Last name")
-        dni = st.text_input("DNI")
-        email = st.text_input("Email")
-        phone = st.text_input("Phone")
-        company = st.text_input("Company (optional)")
-        position = st.text_input("Position (optional)")
-        user = st.text_input("User ID")
-        p1 = st.text_input("Password", type="password")
-        p2 = st.text_input("Repeat password", type="password")
+        st.text_input("First Name")
+        st.text_input("Last Name")
+        st.text_input("DNI")
+        st.text_input("Email")
+        st.text_input("Phone")
+        st.text_input("Company (optional)")
+        st.text_input("Role (optional)")
+        st.text_input("User ID")
+        st.text_input("Password", type="password")
+        st.text_input("Repeat Password", type="password")
+        st.button("Register")
 
-        if st.button("Register"):
-            if p1 != p2:
-                st.error("Passwords do not match")
-            else:
-                users = load_users()
-                users.loc[len(users)] = [
-                    user, hash_pass(p1), "freemium",
-                    name, lastname, dni,
-                    email, phone, company, position
-                ]
-                users.to_csv(USERS_FILE, index=False)
-                st.success("Registered successfully")
-
-if not st.session_state.logged:
-    auth()
+# --------------------------------------------------
+# MAIN
+# --------------------------------------------------
+if "user" not in st.session_state:
+    auth_screen()
     st.stop()
 
-# =========================
-# LOAD DATA
-# =========================
-@st.cache_data
-def load_data(files):
-    dfs = []
-    for f in files:
-        if os.path.exists(f):
-            dfs.append(smart_read_csv(f))
-    return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+is_admin = st.session_state.role == "admin"
 
-shipments = load_data(SHIPMENT_FILES)
-fields = load_data(FIELD_FILES)
-
-# =========================
-# SIDEBAR
-# =========================
-if os.path.exists(LOGO):
-    st.sidebar.image(LOGO, width=130)
-
-st.sidebar.write(f"User: **{st.session_state.user}**")
-st.sidebar.write(f"Role: **{st.session_state.role}**")
-
-if st.sidebar.button("Logout"):
-    st.session_state.logged = False
-    st.session_state.role = None
-    st.session_state.user = None
-    st.rerun()
-
-# =========================
+# --------------------------------------------------
 # DASHBOARD
-# =========================
+# --------------------------------------------------
 st.title("📊 Data Core – Dashboard")
 
-# =========================
-# SHIPMENTS
-# =========================
-st.subheader("📦 Shipments")
+# ---------------- SHIPMENTS ----------------
+st.header("📦 Shipments")
 
-col_product = next(c for c in shipments.columns if "producto" in c.lower())
-col_country = next(c for c in shipments.columns if "pais destino" in c.lower())
-col_year = next(c for c in shipments.columns if "año inspe" in c.lower() or "aao_inspeccia3n" in c.lower())
-
-products = sorted(
-    shipments[col_product]
-    .dropna()
-    .astype(str)
-    .unique()
-)
-
-years = sorted(
-    shipments[col_year]
-    .dropna()
-    .astype(str)
-    .unique()
-)
-
-product = st.selectbox("Product", products)
-year = st.selectbox("Inspection year", years)
-
-filtered = shipments[
-    (shipments[col_product].astype(str) == product) &
-    (shipments[col_year].astype(str) == year)
-]
-
-st.metric("Total shipments", len(filtered))
-
-if st.session_state.role == "admin":
-    st.dataframe(filtered)
+if shipments.empty:
+    st.warning("No shipment data available.")
 else:
-    st.dataframe(filtered.head(3))
+    col_product = "Producto"
+    col_country = "Pais Destino"
+    col_year = "Año Inspección"
 
-# =========================
-# FIELDS
-# =========================
-st.subheader("🌾 Certified Fields")
+    # Limpieza de columnas mal codificadas
+    for c in shipments.columns:
+        if "Producto" in c:
+            col_product = c
+        if "Pais" in c:
+            col_country = c
+        if "Año" in c:
+            col_year = c
 
-if st.session_state.role == "admin":
-    st.dataframe(fields)
+    product = st.selectbox(
+        "Product",
+        sorted(shipments[col_product].dropna().unique())
+    )
+
+    df_prod = shipments[shipments[col_product] == product]
+
+    if col_year in df_prod.columns:
+        year = st.selectbox(
+            "Year",
+            sorted(df_prod[col_year].dropna().unique())
+        )
+        df_prod = df_prod[df_prod[col_year] == year]
+
+    country_options = ["All"] + sorted(df_prod[col_country].dropna().unique())
+    country = st.selectbox("Destination country", country_options)
+
+    if country != "All":
+        df_prod = df_prod[df_prod[col_country] == country]
+
+    st.dataframe(limit_df(df_prod, is_admin))
+
+    # -------- CTA FREEMIUM --------
+    if not is_admin:
+        subject = f"Solicitud Data Completa – {product}"
+        body = f"""
+Usuario: {st.session_state.user}
+Producto: {product}
+Tipo de data: Envíos
+Periodo: {year if col_year in df_prod.columns else 'No especificado'}
+"""
+        mailto = f"mailto:{MAIL_TO}?subject={subject}&body={body}"
+        st.markdown(
+            f"""
+            🔓 **¿Quieres acceso completo y actualizado?**  
+            <a href="{mailto}" target="_blank"><b>Adquirir data completa aquí</b></a>
+            """,
+            unsafe_allow_html=True
+        )
+
+# ---------------- CAMPOS ----------------
+st.header("🌾 Certified Fields")
+
+campo_df = pd.concat(
+    [campo_limon, campo_arandano],
+    ignore_index=True
+) if campo_limon is not None and campo_arandano is not None else pd.DataFrame()
+
+if campo_df.empty:
+    st.warning("No certified field data available.")
 else:
-    st.dataframe(fields.head(3))
+    prod_col = "producto"
+    prod = st.selectbox(
+        "Product (Fields)",
+        sorted(campo_df[prod_col].dropna().unique())
+    )
 
-st.success("✅ Data Core v1.0 – stable and operational")
+    df_campo = campo_df[campo_df[prod_col] == prod]
+    st.dataframe(limit_df(df_campo, is_admin))
+
+    if not is_admin:
+        subject = f"Solicitud Data Campos – {prod}"
+        body = f"""
+Usuario: {st.session_state.user}
+Producto: {prod}
+Tipo de data: Campos certificados
+"""
+        mailto = f"mailto:{MAIL_TO}?subject={subject}&body={body}"
+        st.markdown(
+            f"""
+            🔓 **Acceso completo a campos certificados**  
+            <a href="{mailto}" target="_blank"><b>Adquirir data completa aquí</b></a>
+            """,
+            unsafe_allow_html=True
+        )
+
+st.markdown("---")
+st.caption("✅ Data Core – MVP estable | Modelo de suscripción por producto")
