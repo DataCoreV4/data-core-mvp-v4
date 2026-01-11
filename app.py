@@ -68,14 +68,14 @@ def auth_screen():
     st.title("🌱 Data Core")
     st.subheader("Agroexport Intelligence Platform")
 
-    tab1, tab2 = st.tabs(["Login", "Register"])
+    tab_login, tab_register = st.tabs(["Login", "Register"])
 
     # ---------- LOGIN ----------
-    with tab1:
-        user = st.text_input("User")
-        pwd = st.text_input("Password", type="password")
+    with tab_login:
+        user = st.text_input("User", key="login_user")
+        pwd = st.text_input("Password", type="password", key="login_pass")
 
-        if st.button("Login"):
+        if st.button("Login", key="login_btn"):
             if user == ADMIN_USER and pwd == ADMIN_PASS:
                 st.session_state.logged = True
                 st.session_state.role = "admin"
@@ -95,19 +95,19 @@ def auth_screen():
                 st.error("Invalid credentials")
 
     # ---------- REGISTRO ----------
-    with tab2:
-        name = st.text_input("Name")
-        lastname = st.text_input("Last name")
-        dni = st.text_input("DNI")
-        email = st.text_input("Email")
-        phone = st.text_input("Phone")
-        company = st.text_input("Company (optional)")
-        position = st.text_input("Position (optional)")
-        user = st.text_input("User ID")
-        pwd1 = st.text_input("Password", type="password")
-        pwd2 = st.text_input("Repeat password", type="password")
+    with tab_register:
+        name = st.text_input("Name", key="reg_name")
+        lastname = st.text_input("Last name", key="reg_lastname")
+        dni = st.text_input("DNI", key="reg_dni")
+        email = st.text_input("Email", key="reg_email")
+        phone = st.text_input("Phone", key="reg_phone")
+        company = st.text_input("Company (optional)", key="reg_company")
+        position = st.text_input("Position (optional)", key="reg_position")
+        user = st.text_input("User ID", key="reg_user")
+        pwd1 = st.text_input("Password", type="password", key="reg_pass1")
+        pwd2 = st.text_input("Repeat password", type="password", key="reg_pass2")
 
-        if st.button("Register"):
+        if st.button("Register", key="reg_btn"):
             if pwd1 != pwd2:
                 st.error("Passwords do not match")
             elif user == "" or email == "":
@@ -177,10 +177,6 @@ if shipments.empty:
 else:
     st.success(f"Shipments loaded: {len(shipments)}")
 
-    with st.expander("Detected columns"):
-        st.write(list(shipments.columns))
-
-    # Detección robusta de columnas
     col_product = next((c for c in shipments.columns if "producto" in c.lower()), None)
     col_country = next((c for c in shipments.columns if "pais destino" in c.lower()), None)
     col_year = next((c for c in shipments.columns if "año inspe" in c.lower() or "aao_inspeccia3n" in c.lower()), None)
@@ -188,26 +184,17 @@ else:
     if not col_product:
         st.error("Product column not found")
     else:
-        product = st.selectbox(
-            "Product",
-            sorted(shipments[col_product].dropna().unique())
-        )
+        product = st.selectbox("Product", sorted(shipments[col_product].dropna().unique()))
 
         df = shipments[shipments[col_product] == product]
 
-        # Filtro país
         if col_country:
-            country = st.selectbox(
-                "Destination country",
-                ["All"] + sorted(df[col_country].dropna().unique())
-            )
+            country = st.selectbox("Destination country", ["All"] + sorted(df[col_country].dropna().unique()))
             if country != "All":
                 df = df[df[col_country] == country]
 
-        # Filtro año
         if col_year:
-            years = sorted(df[col_year].dropna().unique())
-            year = st.selectbox("Inspection year", ["All"] + list(years))
+            year = st.selectbox("Inspection year", ["All"] + sorted(df[col_year].dropna().unique()))
             if year != "All":
                 df = df[df[col_year] == year]
 
@@ -235,7 +222,4 @@ else:
         st.dataframe(fields.head(3), use_container_width=True)
         st.info("Freemium view – limited data")
 
-# =========================
-# FOOTER
-# =========================
-st.success("✅ Data Core MVP – stable version ready for ProInnóvate")
+st.success("✅ Data Core MVP – stable and functional")
