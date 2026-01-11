@@ -79,11 +79,14 @@ if not st.session_state.login:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
 
-        if os.path.exists("logo_datacore.png"):
-            try:
-                st.image("logo_datacore.png", width=260)
-            except:
-                pass
+        # LOGO (PNG o JPG)
+        for logo in ["logotipo_datacore.jpg", "logo_datacore.png"]:
+            if os.path.exists(logo):
+                try:
+                    st.image(logo, width=260)
+                    break
+                except:
+                    pass
 
         st.title("🌱 Data Core")
         st.subheader("Plataforma de inteligencia agroexportadora")
@@ -138,11 +141,13 @@ if not st.session_state.login:
 # =====================================================
 # SIDEBAR
 # =====================================================
-if os.path.exists("logo_datacore.png"):
-    try:
-        st.sidebar.image("logo_datacore.png", width=180)
-    except:
-        pass
+for logo in ["logotipo_datacore.jpg", "logo_datacore.png"]:
+    if os.path.exists(logo):
+        try:
+            st.sidebar.image(logo, width=180)
+            break
+        except:
+            pass
 
 st.sidebar.markdown(f"👤 **{st.session_state.usuario}**")
 
@@ -157,16 +162,20 @@ if st.sidebar.button("Cerrar sesión"):
     st.rerun()
 
 # =====================================================
-# DASHBOARD (SIEMPRE RENDERIZA)
+# DASHBOARD
 # =====================================================
 st.title("📊 Data Core – Dashboard")
 
 # =====================================================
-# CARGA DE DATOS (DEFENSIVA)
+# CARGA DE DATOS (NOMBRES REALES)
 # =====================================================
 @st.cache_data
 def cargar_envios():
-    archivos = ["datos_reales.csv", "data_arandano_1_6.csv"]
+    archivos = [
+        "datos.csv",
+        "datos_reales.csv",
+        "datos_arandano_1_6.csv"
+    ]
     dfs = []
     for f in archivos:
         if os.path.exists(f):
@@ -183,7 +192,10 @@ def cargar_envios():
 
 @st.cache_data
 def cargar_campos():
-    archivos = ["data_campo_limon_2025.csv", "data_campo_arandano_2025.csv"]
+    archivos = [
+        "datos_campo_limon_2025.csv",
+        "datos_campo_arandano_2025.csv"
+    ]
     dfs = []
     for f in archivos:
         if os.path.exists(f):
@@ -202,7 +214,7 @@ envios = cargar_envios()
 campos = cargar_campos()
 
 # =====================================================
-# SECCIÓN ENVÍOS
+# ENVÍOS
 # =====================================================
 st.subheader("📦 Envíos")
 
@@ -210,12 +222,12 @@ if envios.empty:
     st.warning("No hay datos de envíos cargados.")
 else:
     if "producto" not in envios.columns:
-        st.error("La columna 'producto' no existe en los datos.")
+        st.error("No existe la columna 'producto' en los datos.")
     else:
         productos = sorted(envios["producto"].dropna().unique())
 
         if not productos:
-            st.warning("No hay productos disponibles para mostrar.")
+            st.warning("No hay productos disponibles.")
         else:
             producto = st.selectbox("Producto", productos)
             dfp = envios[envios["producto"] == producto]
@@ -229,7 +241,7 @@ else:
                 st.info("Modo freemium – vista limitada")
 
 # =====================================================
-# SECCIÓN CAMPOS
+# CAMPOS
 # =====================================================
 st.subheader("🌾 Campos certificados")
 
@@ -242,4 +254,4 @@ else:
         st.dataframe(campos.head(3), use_container_width=True)
         st.info("Modo freemium – vista limitada")
 
-st.success("✅ Data Core v1.0 – plataforma estable y operativa")
+st.success("✅ Data Core v1.0 – datos cargados correctamente")
