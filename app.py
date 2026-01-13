@@ -103,13 +103,7 @@ def drive_download(url):
 def load_csv(url):
     r = requests.get(drive_download(url))
     r.raise_for_status()
-    return pd.read_csv(
-        BytesIO(r.content),
-        sep=";",
-        encoding="latin1",
-        on_bad_lines="skip",
-        low_memory=False
-    )
+    return pd.read_csv(BytesIO(r.content), sep=";", encoding="latin1", on_bad_lines="skip", low_memory=False)
 
 # =====================================================
 # USUARIOS
@@ -161,14 +155,28 @@ def dashboard():
     try:
         df = load_csv(DRIVE_MAP["envios"][anio][producto])
         st.dataframe(df if st.session_state.role=="admin" else df.head(3))
-    except Exception as e:
+
+        if st.session_state.role != "admin":
+            st.markdown("🔓 **¿Necesitas acceso completo a la información de envíos?**")
+            st.link_button(
+                "📩 Solicitar acceso completo – Envíos",
+                f"mailto:datacore.agrotech@gmail.com?subject=Acceso%20ENVÍOS%20{producto}%20{anio}"
+            )
+    except:
         st.info("📌 Información en proceso de mejora")
 
     st.subheader("🌾 Campos certificados")
     try:
         dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
         st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
-    except Exception:
+
+        if st.session_state.role != "admin":
+            st.markdown("🔓 **¿Necesitas acceso completo a la información de campos certificados?**")
+            st.link_button(
+                "📩 Solicitar acceso completo – Campos",
+                f"mailto:datacore.agrotech@gmail.com?subject=Acceso%20CAMPOS%20{producto}%20{anio}"
+            )
+    except:
         st.info("📌 Información de campos en proceso de mejora")
 
 # =====================================================
