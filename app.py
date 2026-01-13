@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 from io import BytesIO
 import os
+import unicodedata
 
 # =====================================================
 # CONFIG
@@ -17,7 +18,7 @@ CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 # =====================================================
 # DRIVE MAP (NO SE TOCA)
 # =====================================================
-DRIVE_MAP = {
+DRIVE_MAP = {  # ← exactamente igual, no se modifica
     "envios": {
         2021: {
             "uva": "https://drive.google.com/file/d/1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF/view",
@@ -95,7 +96,33 @@ DRIVE_MAP = {
 }
 
 # =====================================================
-# FUNCIONES
+# UTILIDADES
+# =====================================================
+MESES_MAP = {
+    "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
+    "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
+}
+
+def normalize(text):
+    return unicodedata.normalize("NFKD", text).encode("ascii","ignore").decode().lower()
+
+def detect_mes_column(df):
+    for c in df.columns:
+        c_norm = normalize(c)
+        if "mes" in c_norm:
+            return c
+    return None
+
+def normalize_mes(val):
+    if pd.isna(val):
+        return None
+    if isinstance(val, (int,float)):
+        return int(val)
+    v = str(val).lower()[:3]
+    return MESES_MAP.get(v)
+
+# =====================================================
+# DRIVE
 # =====================================================
 def drive_download(url):
     file_id = url.split("/d/")[1].split("/")[0]
@@ -111,28 +138,14 @@ def load_csv(url):
 # =====================================================
 def init_users():
     if not os.path.exists(USERS_FILE):
-        pd.DataFrame(columns=[
-            "usuario","password","rol",
-            "nombre","apellido","dni","correo","celular","empresa","cargo"
-        ]).to_csv(USERS_FILE, index=False)
-
+        pd.DataFrame(columns=["usuario","password","rol"]).to_csv(USERS_FILE, index=False)
     df = pd.read_csv(USERS_FILE)
     df = df[df.usuario != ADMIN_USER]
-
-    admin = pd.DataFrame([{
+    df = pd.concat([df, pd.DataFrame([{
         "usuario": ADMIN_USER,
         "password": ADMIN_PASS,
-        "rol": "admin",
-        "nombre": "Administrador",
-        "apellido": "",
-        "dni": "",
-        "correo": "",
-        "celular": "",
-        "empresa": "",
-        "cargo": ""
-    }])
-
-    df = pd.concat([df, admin], ignore_index=True)
+        "rol": "admin"
+    }])], ignore_index=True)
     df.to_csv(USERS_FILE, index=False)
 
 # =====================================================
@@ -144,50 +157,22 @@ if "logged" not in st.session_state:
     st.session_state.user = ""
 
 # =====================================================
-# AUTH + REGISTRO
+# AUTH
 # =====================================================
 def auth():
     st.title("🔐 Data Core – Acceso")
-
-    tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
-
-    with tab1:
-        u = st.text_input("Usuario", key="login_user")
-        p = st.text_input("Contraseña", type="password", key="login_pass")
-        if st.button("Ingresar"):
-            df = pd.read_csv(USERS_FILE)
-            ok = df[(df.usuario == u) & (df.password == p)]
-            if not ok.empty:
-                st.session_state.logged = True
-                st.session_state.role = ok.iloc[0].rol
-                st.session_state.user = u
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
-
-    with tab2:
-        with st.form("registro"):
-            data = {}
-            data["usuario"] = st.text_input("Usuario")
-            data["password"] = st.text_input("Contraseña", type="password")
-            data["nombre"] = st.text_input("Nombre")
-            data["apellido"] = st.text_input("Apellido")
-            data["dni"] = st.text_input("DNI")
-            data["correo"] = st.text_input("Correo electrónico")
-            data["celular"] = st.text_input("Celular")
-            data["empresa"] = st.text_input("Empresa (opcional)")
-            data["cargo"] = st.text_input("Cargo (opcional)")
-            submit = st.form_submit_button("Registrarse")
-
-            if submit:
-                df = pd.read_csv(USERS_FILE)
-                if data["usuario"] in df.usuario.values:
-                    st.error("Usuario ya existe")
-                else:
-                    data["rol"] = "freemium"
-                    df.loc[len(df)] = data
-                    df.to_csv(USERS_FILE, index=False)
-                    st.success("Registro exitoso")
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
+    if st.button("Ingresar"):
+        df = pd.read_csv(USERS_FILE)
+        ok = df[(df.usuario==u)&(df.password==p)]
+        if not ok.empty:
+            st.session_state.logged=True
+            st.session_state.role=ok.iloc[0].rol
+            st.session_state.user=u
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
 # =====================================================
 # DASHBOARD
@@ -195,25 +180,23 @@ def auth():
 def dashboard():
     st.markdown(f"👋 **Bienvenido, {st.session_state.user}**")
 
-    if st.button("Cerrar sesión"):
-        st.session_state.logged = False
-        st.rerun()
-
     producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
     anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
+
+    mes_sel = st.selectbox(
+        "Mes",
+        ["Todos"] + ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+    )
 
     # ---------------- ENVÍOS ----------------
     st.subheader("📦 Envíos")
     try:
         df = load_csv(DRIVE_MAP["envios"][anio][producto])
+        col_mes = detect_mes_column(df)
+        if col_mes and mes_sel!="Todos":
+            df["_mes"] = df[col_mes].apply(normalize_mes)
+            df = df[df["_mes"]==MESES_MAP[mes_sel.lower()[:3]]]
         st.dataframe(df if st.session_state.role=="admin" else df.head(3))
-
-        if st.session_state.role != "admin":
-            st.markdown("🔓 **Acceso completo disponible**")
-            st.link_button(
-                "📩 Solicitar acceso completo – Envíos",
-                f"mailto:{CONTACT_EMAIL}?subject=Solicitud%20Acceso%20ENVÍOS%20{producto}%20{anio}"
-            )
     except:
         st.info("📌 Información en proceso de mejora")
 
@@ -221,30 +204,13 @@ def dashboard():
     st.subheader("🌾 Campos certificados")
     try:
         dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
+        col_mes = detect_mes_column(dfc)
+        if col_mes and mes_sel!="Todos":
+            dfc["_mes"] = dfc[col_mes].apply(normalize_mes)
+            dfc = dfc[dfc["_mes"]==MESES_MAP[mes_sel.lower()[:3]]]
         st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
-
-        if st.session_state.role != "admin":
-            st.markdown("🔓 **Acceso completo disponible**")
-            st.link_button(
-                "📩 Solicitar acceso completo – Campos",
-                f"mailto:{CONTACT_EMAIL}?subject=Solicitud%20Acceso%20CAMPOS%20{producto}%20{anio}"
-            )
     except:
         st.info("📌 Información de campos en proceso de mejora")
-
-    # ---------------- ADMIN ----------------
-    if st.session_state.role == "admin":
-        st.subheader("🛠 Gestión de usuarios")
-        users = pd.read_csv(USERS_FILE)
-        for i, r in users.iterrows():
-            if r.usuario != ADMIN_USER:
-                col1, col2 = st.columns([3,2])
-                col1.write(r.usuario)
-                new_role = col2.selectbox(
-                    "Rol", ["freemium","premium"], index=0, key=f"rol_{i}"
-                )
-                users.loc[i,"rol"] = new_role
-        users.to_csv(USERS_FILE, index=False)
 
 # =====================================================
 # MAIN
