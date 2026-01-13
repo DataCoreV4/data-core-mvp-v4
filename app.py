@@ -14,7 +14,7 @@ ADMIN_PASS = "admindatacore123!"
 USERS_FILE = "users.csv"
 
 # =====================================================
-# DRIVE MAP COMPLETO (2021–2025, ENVÍOS + CAMPO)
+# DRIVE MAP (NO SE TOCA)
 # =====================================================
 DRIVE_MAP = {
     "envios": {
@@ -94,7 +94,7 @@ DRIVE_MAP = {
 }
 
 # =====================================================
-# UTILIDADES
+# FUNCIONES
 # =====================================================
 def drive_download(url):
     file_id = url.split("/d/")[1].split("/")[0]
@@ -103,16 +103,20 @@ def drive_download(url):
 def load_csv(url):
     r = requests.get(drive_download(url))
     r.raise_for_status()
-    return pd.read_csv(BytesIO(r.content), encoding="latin1", on_bad_lines="skip", low_memory=False)
+    return pd.read_csv(
+        BytesIO(r.content),
+        sep=";",
+        encoding="latin1",
+        on_bad_lines="skip",
+        low_memory=False
+    )
 
 # =====================================================
 # USUARIOS
 # =====================================================
 def init_users():
-    cols = ["usuario","password","rol"]
     if not os.path.exists(USERS_FILE):
-        pd.DataFrame(columns=cols).to_csv(USERS_FILE, index=False)
-
+        pd.DataFrame(columns=["usuario","password","rol"]).to_csv(USERS_FILE, index=False)
     df = pd.read_csv(USERS_FILE)
     df = df[df.usuario != ADMIN_USER]
     df = pd.concat([df, pd.DataFrame([{
@@ -152,20 +156,19 @@ def auth():
 def dashboard():
     producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
     anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
-    mes = st.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
     st.subheader("📦 Envíos")
     try:
         df = load_csv(DRIVE_MAP["envios"][anio][producto])
         st.dataframe(df if st.session_state.role=="admin" else df.head(3))
-    except:
+    except Exception as e:
         st.info("📌 Información en proceso de mejora")
 
     st.subheader("🌾 Campos certificados")
     try:
         dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
         st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
-    except:
+    except Exception:
         st.info("📌 Información de campos en proceso de mejora")
 
 # =====================================================
