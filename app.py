@@ -13,44 +13,62 @@ ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 USERS_FILE = "users.csv"
 
-# 🔴 CAMBIA SOLO ESTO (link directo al index.csv en Drive)
-INDEX_URL = "https://drive.google.com/uc?id=REEMPLAZA_ID_DEL_INDEX"
+# =====================================================
+# DRIVE MAP (EXPLÍCITO – COMO YA FUNCIONABA)
+# =====================================================
+DRIVE_MAP = {
+    "envios": {
+        2021: {
+            "uva": "https://drive.google.com/file/d/1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF/view",
+            "mango": "https://drive.google.com/file/d/1k6CxjPufa0YF17e264BI8NYO1rFFZuc7/view",
+            "arandano": "https://drive.google.com/file/d/1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9/view",
+            "limon": "https://drive.google.com/file/d/1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8/view",
+            "palta": "https://drive.google.com/file/d/1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ/view",
+        },
+        2022: {
+            "uva": "https://drive.google.com/file/d/1wHxIXmn2stnjdFSnu8spnOSDw9Q45Dti/view",
+            "mango": "https://drive.google.com/file/d/1kjtC1QVGe4w3GWEYhMmB9VD98eYjhvPh/view",
+            "arandano": "https://drive.google.com/file/d/1tJRlp3FWvYZBr3LFPV1PFke3o6LZcOfa/view",
+            "limon": "https://drive.google.com/file/d/1HfO0jh0yPXK99P8mQ080KLEevc4QVnLT/view",
+            "palta": "https://drive.google.com/file/d/1IYS7yUDFmeCw3YyCIgKDbayZ63AORHvf/view",
+        },
+        2023: {
+            "uva": "https://drive.google.com/file/d/1SZjCd3ANa4CF0N0lK_mnOQfzn0-ywTLs/view",
+            "mango": "https://drive.google.com/file/d/1S5mMR3nG_DeH3ZpOqAvcjidzPQMW8kw_/view",
+            "arandano": "https://drive.google.com/file/d/1JhAhZi3roOQpw5ejm3jnW5Av59De8wc2/view",
+            "limon": "https://drive.google.com/file/d/1sGnvph11F431fg5v9c8qzoH-Yxytffti/view",
+            "palta": "https://drive.google.com/file/d/1MCaBirErsv3PeJZ4soi2Fszw8QcJbg7w/view",
+        },
+    },
+    "campo": {
+        2021: {
+            "uva": "https://drive.google.com/file/d/1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A/view",
+            "mango": "https://drive.google.com/file/d/1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu/view",
+            "arandano": "https://drive.google.com/file/d/1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4/view",
+            "limon": "https://drive.google.com/file/d/12xOZVXqxvvepb97On1H8feKUoW_u1Qet/view",
+            "palta": "https://drive.google.com/file/d/1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO/view",
+        },
+        2022: {
+            "uva": "https://drive.google.com/file/d/1LS_80bCCgGE4flJ2BEzav1XeQQSrSX1y/view",
+            "mango": "https://drive.google.com/file/d/16CDM3zQnH3S5n2SNjqwJmk0oUGkbxtJS/view",
+            "arandano": "https://drive.google.com/file/d/1WTkBElLqv3aLQ8s2rkmlQqHM1zsKE33-/view",
+            "limon": "https://drive.google.com/file/d/123wwsJLNrvlTxh2VRZQy1JpVOjI9Oj32/view",
+            "palta": "https://drive.google.com/file/d/1uIs_MXnilSoPIGhtJtmOCv8N8un2VoFg/view",
+        },
+    }
+}
 
 # =====================================================
 # UTILIDADES
 # =====================================================
 def drive_download(url):
-    file_id = url.split("/d/")[1].split("/")[0] if "/d/" in url else url.split("id=")[-1]
+    file_id = url.split("/d/")[1].split("/")[0]
     return f"https://drive.google.com/uc?id={file_id}"
 
-def read_drive_csv(url):
+def load_csv(url):
     r = requests.get(drive_download(url))
     r.raise_for_status()
     return pd.read_csv(BytesIO(r.content), encoding="latin1", on_bad_lines="skip", low_memory=False)
-
-def normalize_cols(df):
-    df.columns = (
-        df.columns.str.lower()
-        .str.strip()
-        .str.replace(" ", "_")
-        .str.replace("ó","o").str.replace("í","i")
-        .str.replace("á","a").str.replace("é","e")
-        .str.replace("ú","u").str.replace("ñ","n")
-    )
-    return df
-
-def normalize_month(v):
-    if pd.isna(v): return None
-    m = str(v).lower().strip()
-    mapa = {
-        "ene":1,"enero":1,"1":1,"feb":2,"febrero":2,"2":2,
-        "mar":3,"marzo":3,"3":3,"abr":4,"abril":4,"4":4,
-        "may":5,"mayo":5,"5":5,"jun":6,"6":6,
-        "jul":7,"7":7,"ago":8,"8":8,
-        "sep":9,"set":9,"9":9,"oct":10,"10":10,
-        "nov":11,"11":11,"dic":12,"12":12
-    }
-    return mapa.get(m)
 
 # =====================================================
 # USUARIOS
@@ -69,7 +87,7 @@ def init_users():
         "rol": "admin",
         "nombre": "Administrador",
         "apellido": "DataCore",
-        "dni": "","email":"","celular":"","empresa":"","cargo":""
+        "dni":"","email":"","celular":"","empresa":"","cargo":""
     }
     df = pd.concat([df, pd.DataFrame([admin])], ignore_index=True)
     df.to_csv(USERS_FILE, index=False)
@@ -87,113 +105,42 @@ if "logged" not in st.session_state:
 # =====================================================
 def auth():
     st.title("🔐 Data Core – Acceso")
-    t1, t2 = st.tabs(["Ingresar","Registrarse"])
-
-    with t1:
-        u = st.text_input("Usuario", key="lu")
-        p = st.text_input("Contraseña", type="password", key="lp")
-        if st.button("Ingresar"):
-            df = pd.read_csv(USERS_FILE)
-            ok = df[(df.usuario==u)&(df.password==p)]
-            if not ok.empty:
-                st.session_state.logged = True
-                st.session_state.user = u
-                st.session_state.role = ok.iloc[0].rol
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
-
-    with t2:
-        with st.form("reg"):
-            data = {}
-            data["usuario"] = st.text_input("Usuario")
-            data["password"] = st.text_input("Contraseña", type="password")
-            rep = st.text_input("Repetir contraseña", type="password")
-            data["nombre"] = st.text_input("Nombre")
-            data["apellido"] = st.text_input("Apellido")
-            data["dni"] = st.text_input("DNI")
-            data["email"] = st.text_input("Correo electrónico")
-            data["celular"] = st.text_input("Celular")
-            data["empresa"] = st.text_input("Empresa (opcional)")
-            data["cargo"] = st.text_input("Cargo (opcional)")
-            if st.form_submit_button("Registrarse"):
-                if data["password"]!=rep:
-                    st.error("Contraseñas no coinciden"); return
-                df = pd.read_csv(USERS_FILE)
-                if data["usuario"] in df.usuario.values:
-                    st.error("Usuario ya existe"); return
-                data["rol"] = "freemium"
-                df = pd.concat([df, pd.DataFrame([data])], ignore_index=True)
-                df.to_csv(USERS_FILE, index=False)
-                st.success("Registro exitoso")
+    u = st.text_input("Usuario")
+    p = st.text_input("Contraseña", type="password")
+    if st.button("Ingresar"):
+        df = pd.read_csv(USERS_FILE)
+        ok = df[(df.usuario==u)&(df.password==p)]
+        if not ok.empty:
+            st.session_state.logged = True
+            st.session_state.user = u
+            st.session_state.role = ok.iloc[0].rol
+            st.rerun()
+        else:
+            st.error("Usuario o contraseña incorrectos")
 
 # =====================================================
-# DASHBOARD (DRIVE)
+# DASHBOARD
 # =====================================================
 def dashboard():
     st.success(f"👋 Bienvenido, {st.session_state.user}")
 
-    try:
-        index = read_drive_csv(INDEX_URL)
-        index = normalize_cols(index)
-    except Exception:
-        st.error("No se pudo cargar el índice de datos")
-        return
+    producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
+    anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
+    mes = st.selectbox("Mes", ["Todos"])
 
-    productos = sorted(index.producto.unique())
-    anios = sorted(index.anio.unique())
-
-    producto = st.selectbox("Producto", productos)
-    anio = st.selectbox("Año", anios)
-    mes = st.selectbox("Mes", ["Todos"] + list(range(1,13)))
-
-    # ================= ENVÍOS =================
     st.subheader("📦 Envíos")
-    env = index[(index.tipo=="envios")&(index.producto==producto)&(index.anio==anio)]
-
-    if env.empty:
+    try:
+        df = load_csv(DRIVE_MAP["envios"][anio][producto])
+        st.dataframe(df if st.session_state.role=="admin" else df.head(3))
+    except Exception:
         st.info("📌 Información en proceso de mejora")
-    else:
-        try:
-            df = normalize_cols(read_drive_csv(env.iloc[0].url))
-            if mes!="Todos":
-                mcol = [c for c in df.columns if "mes" in c][0]
-                df["mes_n"]=df[mcol].apply(normalize_month)
-                df=df[df.mes_n==mes]
 
-            if st.session_state.role!="admin":
-                st.dataframe(df.head(3))
-                st.warning("🔓 Adquirir acceso completo – Envíos")
-            else:
-                st.dataframe(df)
-        except Exception:
-            st.info("📌 Información en proceso de mejora")
-
-    # ================= CAMPOS =================
     st.subheader("🌾 Campos certificados")
-    cam = index[(index.tipo=="campo")&(index.producto==producto)&(index.anio==anio)]
-
-    if cam.empty:
+    try:
+        dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
+        st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
+    except Exception:
         st.info("📌 Información de campos en proceso de mejora")
-    else:
-        try:
-            dfc = normalize_cols(read_drive_csv(cam.iloc[0].url))
-            if mes!="Todos":
-                mcol=[c for c in dfc.columns if "mes" in c][0]
-                dfc["mes_n"]=dfc[mcol].apply(normalize_month)
-                dfc=dfc[dfc.mes_n==mes]
-
-            if st.session_state.role!="admin":
-                st.dataframe(dfc.head(3))
-                st.warning("🔓 Adquirir acceso completo – Campos")
-            else:
-                st.dataframe(dfc)
-        except Exception:
-            st.info("📌 Información de campos en proceso de mejora")
-
-    if st.button("Cerrar sesión"):
-        st.session_state.logged=False
-        st.rerun()
 
 # =====================================================
 # MAIN
@@ -204,4 +151,3 @@ if not st.session_state.logged:
     auth()
 else:
     dashboard()
-
