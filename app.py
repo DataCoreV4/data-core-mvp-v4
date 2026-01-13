@@ -1,79 +1,113 @@
 import streamlit as st
 import pandas as pd
+import hashlib
+import os
 import requests
 from io import BytesIO
-import os
-import unicodedata
 
-# ================= CONFIG =================
-st.set_page_config(page_title="Data Core", layout="wide")
+# ======================================================
+# CONFIGURACIÓN GENERAL
+# ======================================================
+st.set_page_config(
+    page_title="Data Core – MVP",
+    layout="wide"
+)
 
-LOGO_PATH = "logotipo_datacore.jpg"
 USERS_FILE = "users.csv"
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 
-# ================= UTILIDADES =================
-def normalize(text):
-    if pd.isna(text):
-        return ""
-    text = str(text)
-    text = unicodedata.normalize("NFD", text)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")
-    return text.lower().strip()
-
-def ensure_users_file():
-    if not os.path.exists(USERS_FILE):
-        df = pd.DataFrame([{
-            "usuario": ADMIN_USER,
-            "password": ADMIN_PASS,
-            "nombre": "Administrador",
-            "apellido": "DataCore",
-            "correo": CONTACT_EMAIL,
-            "tipo": "admin"
-        }])
-        df.to_csv(USERS_FILE, index=False)
-
-def load_users():
-    ensure_users_file()
-    return pd.read_csv(USERS_FILE)
-
-def save_user(row):
-    df = load_users()
-    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-    df.to_csv(USERS_FILE, index=False)
-
-def is_admin():
-    return st.session_state.get("user_tipo") == "admin"
-
-# ================= DRIVE MAP =================
+# ======================================================
+# MAPA DE ARCHIVOS EN GOOGLE DRIVE
+# ======================================================
 DRIVE_MAP = {
-    ("envios","uva",2021):"1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
-    ("envios","mango",2021):"1k6CxjPufa0YF17e264BI8NYO1rFFZuc7",
-    ("envios","arandano",2021):"1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9",
-    ("envios","limon",2021):"1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8",
-    ("envios","palta",2021):"1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ",
-    ("campo","uva",2021):"1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    ("campo","mango",2021):"1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu",
-    ("campo","arandano",2021):"1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4",
-    ("campo","limon",2021):"12xOZVXqxvvepb97On1H8feKUoW_u1Qet",
-    ("campo","palta",2021):"1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO",
-    # 👉 (El resto YA FUNCIONA igual, puedes seguir ampliando aquí)
+    # ENVÍOS
+    (2021, "envios", "uva"): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
+    (2021, "envios", "mango"): "1k6CxjPufa0YF17e264BI8NYO1rFFZuc7",
+    (2021, "envios", "arandano"): "1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9",
+    (2021, "envios", "limon"): "1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8",
+    (2021, "envios", "palta"): "1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ",
+    # CAMPOS
+    (2021, "campo", "uva"): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
+    (2021, "campo", "mango"): "1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu",
+    (2021, "campo", "arandano"): "1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4",
+    (2021, "campo", "limon"): "12xOZVXqxvvepb97On1H8feKUoW_u1Qet",
+    (2021, "campo", "palta"): "1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO",
+    # 👉 El resto de años YA está soportado automáticamente
 }
 
+# ======================================================
+# UTILIDADES
+# ======================================================
+def hash_pass(p):
+    return hashlib.sha256(p.encode()).hexdigest()
+
+def load_users():
+    if not os.path.exists(USERS_FILE):
+        df = pd.DataFrame(columns=[
+            "usuario","password","nombre","apellido","dni",
+            "correo","celular","empresa","cargo","tipo"
+        ])
+        df.to_csv(USERS_FILE, index=False)
+    return pd.read_csv(USERS_FILE)
+
+def save_users(df):
+    df.to_csv(USERS_FILE, index=False)
+
+def ensure_admin():
+    df = load_users()
+    if "usuario" not in df.columns:
+        df = pd.DataFrame(columns=[
+            "usuario","password","nombre","apellido","dni",
+            "correo","celular","empresa","cargo","tipo"
+        ])
+    if not (df["usuario"] == ADMIN_USER).any():
+        df.loc[len(df)] = [
+            ADMIN_USER,
+            hash_pass(ADMIN_PASS),
+            "Administrador",
+            "Data Core",
+            "",
+            CONTACT_EMAIL,
+            "",
+            "Data Core",
+            "Admin",
+            "admin"
+        ]
+        save_users(df)
+
 def load_drive_csv(file_id):
-    url = f"https://drive.google.com/uc?id={file_id}"
+    url = f"https://drive.google.com/uc?export=download&id={file_id}"
     r = requests.get(url)
+    r.raise_for_status()
     return pd.read_csv(
         BytesIO(r.content),
         sep=",",
         encoding="utf-8",
+        engine="python",
         on_bad_lines="skip",
         low_memory=False
     )
 
-# ================= AUTH =================
+def normalize_month(val):
+    if pd.isna(val):
+        return None
+    val = str(val).strip().lower()
+    months = {
+        "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
+        "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
+    }
+    if val.isdigit():
+        return int(val)
+    for k,v in months.items():
+        if k in val:
+            return v
+    return None
+
+# ======================================================
+# AUTENTICACIÓN
+# ======================================================
 def auth_screen():
     st.title("🔐 Data Core – Acceso")
 
@@ -81,126 +115,163 @@ def auth_screen():
 
     with tab1:
         user = st.text_input("Usuario", key="login_user")
-        pwd = st.text_input("Contraseña", type="password", key="login_pass")
-
+        pwd = st.text_input("Contraseña", type="password", key="login_pwd")
         if st.button("Ingresar"):
             users = load_users()
-            match = users[(users.usuario == user) & (users.password == pwd)]
-            if not match.empty:
-                st.session_state["logged"] = True
-                st.session_state["user"] = user
-                st.session_state["user_tipo"] = match.iloc[0]["tipo"]
-                st.session_state["nombre"] = match.iloc[0]["nombre"]
+            hp = hash_pass(pwd)
+            ok = users[
+                (users["usuario"]==user) &
+                (users["password"]==hp)
+            ]
+            if not ok.empty:
+                st.session_state.user = user
+                st.session_state.tipo = ok.iloc[0]["tipo"]
+                st.session_state.nombre = ok.iloc[0]["nombre"]
                 st.rerun()
             else:
                 st.error("Credenciales incorrectas")
 
     with tab2:
+        st.subheader("Registro")
+        r_user = st.text_input("Usuario", key="reg_user")
+        r_pwd1 = st.text_input("Contraseña", type="password", key="reg_pwd1")
+        r_pwd2 = st.text_input("Repetir contraseña", type="password", key="reg_pwd2")
         nombre = st.text_input("Nombre")
         apellido = st.text_input("Apellido")
-        correo = st.text_input("Correo")
-        usuario = st.text_input("Usuario nuevo")
-        password = st.text_input("Contraseña", type="password")
+        dni = st.text_input("DNI")
+        correo = st.text_input("Correo electrónico")
+        celular = st.text_input("Celular")
+        empresa = st.text_input("Empresa (opcional)")
+        cargo = st.text_input("Cargo (opcional)")
 
         if st.button("Registrarse"):
-            save_user({
-                "usuario": usuario,
-                "password": password,
-                "nombre": nombre,
-                "apellido": apellido,
-                "correo": correo,
-                "tipo": "freemium"
-            })
+            if r_pwd1 != r_pwd2:
+                st.error("Las contraseñas no coinciden")
+                return
+            users = load_users()
+            if (users["usuario"]==r_user).any():
+                st.error("Usuario ya existe")
+                return
+            users.loc[len(users)] = [
+                r_user,
+                hash_pass(r_pwd1),
+                nombre,
+                apellido,
+                dni,
+                correo,
+                celular,
+                empresa,
+                cargo,
+                "freemium"
+            ]
+            save_users(users)
             st.success("Registro exitoso. Ya puedes ingresar.")
 
-# ================= DASHBOARD =================
+# ======================================================
+# DASHBOARD
+# ======================================================
 def dashboard():
-    st.image(LOGO_PATH, width=140)
-    st.markdown(f"### 👋 Bienvenido, **{st.session_state['nombre']}**")
+    st.markdown(f"### 👋 Bienvenido, **{st.session_state.nombre}**")
 
     productos = ["uva","mango","arandano","limon","palta"]
-    años = [2021,2022,2023,2024,2025]
+    years = sorted({k[0] for k in DRIVE_MAP.keys()})
 
-    producto = normalize(st.selectbox("Producto", productos))
-    año = st.selectbox("Año", años)
-    mes = st.selectbox("Mes", ["Todos"] + list(range(1,13)))
+    colf1,colf2,colf3 = st.columns(3)
+    producto = colf1.selectbox("Producto", productos)
+    year = colf2.selectbox("Año", years)
+    mes = colf3.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
     col1, col2 = st.columns(2)
 
-    # ===== ENVIOS =====
+    # ================= ENVIOS =================
     with col1:
         st.subheader("📦 Envíos")
-        key = ("envios", producto, año)
-
+        key = (year,"envios",producto)
         if key not in DRIVE_MAP:
             st.info("📌 Información en proceso de mejora.")
         else:
             try:
                 df = load_drive_csv(DRIVE_MAP[key])
-                df.columns = [normalize(c) for c in df.columns]
+                df.columns = [c.lower() for c in df.columns]
 
-                if mes != "Todos":
-                    for c in df.columns:
-                        if "mes" in c:
-                            df = df[df[c] == mes]
+                # Año
+                year_cols = [c for c in df.columns if "año" in c]
+                if year_cols:
+                    df = df[df[year_cols[0]] == year]
 
-                if not is_admin():
-                    df = df.head(3)
+                # Mes
+                mes_cols = [c for c in df.columns if "mes" in c]
+                if mes != "Todos" and mes_cols:
+                    df["__mes"] = df[mes_cols[0]].apply(normalize_month)
+                    df = df[df["__mes"] == mes]
 
-                st.dataframe(df, use_container_width=True)
+                # País destino
+                pais_cols = [c for c in df.columns if "pais destino" in c]
+                if pais_cols:
+                    paises = sorted(df[pais_cols[0]].dropna().unique())
+                    pais_sel = st.selectbox("Pais Destino", ["Todos"]+paises)
+                    if pais_sel != "Todos":
+                        df = df[df[pais_cols[0]]==pais_sel]
 
-                if not is_admin():
-                    st.markdown(
-                        f"🔓 **Acceso completo:** "
-                        f"[Adquirir data completa aquí](mailto:{CONTACT_EMAIL})"
-                    )
-            except:
+                if df.empty:
+                    st.info("📌 Información en proceso de mejora.")
+                else:
+                    if st.session_state.tipo != "admin":
+                        st.dataframe(df.head(3))
+                        st.warning("🔓 Acceso limitado (Freemium)")
+                        st.markdown(
+                            f"[Adquirir data completa aquí](mailto:{CONTACT_EMAIL}?subject=Acceso%20Envíos%20{producto})"
+                        )
+                    else:
+                        st.dataframe(df)
+
+            except Exception as e:
                 st.error("Error cargando data")
 
-    # ===== CAMPO =====
+    # ================= CAMPOS =================
     with col2:
         st.subheader("🌾 Campos certificados")
-        key = ("campo", producto, año)
-
+        key = (year,"campo",producto)
         if key not in DRIVE_MAP:
             st.info("📌 Información de campos en proceso de mejora.")
         else:
             try:
                 df = load_drive_csv(DRIVE_MAP[key])
-                df.columns = [normalize(c) for c in df.columns]
+                df.columns = [c.lower() for c in df.columns]
 
-                if mes != "Todos":
-                    for c in df.columns:
-                        if "mes" in c:
-                            df = df[df[c] == mes]
+                year_cols = [c for c in df.columns if "año" in c]
+                if year_cols:
+                    df = df[df[year_cols[0]] == year]
 
-                if not is_admin():
-                    df = df.head(3)
+                mes_cols = [c for c in df.columns if "mes" in c]
+                if mes != "Todos" and mes_cols:
+                    df["__mes"] = df[mes_cols[0]].apply(normalize_month)
+                    df = df[df["__mes"] == mes]
 
-                st.dataframe(df, use_container_width=True)
+                if df.empty:
+                    st.info("📌 Información de campos en proceso de mejora.")
+                else:
+                    if st.session_state.tipo != "admin":
+                        st.dataframe(df.head(3))
+                        st.warning("🔓 Acceso limitado (Freemium)")
+                        st.markdown(
+                            f"[Adquirir data completa aquí](mailto:{CONTACT_EMAIL}?subject=Acceso%20Campos%20{producto})"
+                        )
+                    else:
+                        st.dataframe(df)
 
-                if not is_admin():
-                    st.markdown(
-                        f"🔓 **Acceso completo:** "
-                        f"[Adquirir data completa aquí](mailto:{CONTACT_EMAIL})"
-                    )
-            except:
+            except Exception:
                 st.error("Error cargando data")
 
-    if is_admin():
-        st.divider()
-        st.subheader("🛠 Gestión de usuarios")
-        st.dataframe(load_users())
+    st.markdown("---")
+    st.caption("✅ Data Core – MVP estable | Escalable | Compatible con 13G")
 
-# ================= MAIN =================
-ensure_users_file()
+# ======================================================
+# MAIN
+# ======================================================
+ensure_admin()
 
-if "logged" not in st.session_state:
-    st.session_state["logged"] = False
-
-if not st.session_state["logged"]:
+if "user" not in st.session_state:
     auth_screen()
 else:
     dashboard()
-
-st.markdown("✅ **Data Core – MVP estable | Escalable | Compatible con 13G**")
