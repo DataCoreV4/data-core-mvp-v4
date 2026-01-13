@@ -4,6 +4,7 @@ import requests
 from io import BytesIO
 import os
 import unicodedata
+from datetime import date
 
 # =====================================================
 # CONFIG
@@ -13,6 +14,7 @@ st.set_page_config("Data Core", layout="wide")
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 USERS_FILE = "users.csv"
+PERMISSIONS_FILE = "permissions.csv"
 CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 
 # =====================================================
@@ -137,6 +139,26 @@ def init_users():
     df=pd.concat([df,pd.DataFrame([{"usuario":ADMIN_USER,"password":ADMIN_PASS,"rol":"admin"}])])
     df.to_csv(USERS_FILE,index=False)
 
+def init_permissions():
+    if not os.path.exists(PERMISSIONS_FILE):
+        pd.DataFrame(columns=[
+            "usuario","producto","anio","mes",
+            "fecha_inicio","fecha_fin"
+        ]).to_csv(PERMISSIONS_FILE,index=False)
+
+def has_premium_access(user, producto, anio, mes):
+    df = pd.read_csv(PERMISSIONS_FILE, parse_dates=["fecha_inicio","fecha_fin"])
+    today = pd.to_datetime(date.today())
+    df = df[
+        (df.usuario==user) &
+        (df.producto==producto) &
+        (df.anio==anio) &
+        ((df.mes=="Todos") | (df.mes==mes)) &
+        (df.fecha_inicio<=today) &
+        (df.fecha_fin>=today)
+    ]
+    return not df.empty
+
 # =====================================================
 # SESIÓN
 # =====================================================
@@ -198,27 +220,56 @@ def dashboard():
             if mc and mes!="Todos":
                 df["_mes"]=df[mc].apply(parse_mes)
                 df=df[df["_mes"]==MESES_MAP[mes.lower()]]
-            st.dataframe(df if st.session_state.role=="admin" else df.head(3))
-            if st.session_state.role!="admin":
+
+            full_access = (
+                st.session_state.role=="admin" or
+                (st.session_state.role=="premium" and has_premium_access(
+                    st.session_state.user, producto, anio, mes))
+            )
+
+            st.dataframe(df if full_access else df.head(3))
+
+            if not full_access:
                 st.markdown("🔓 **Acceso completo disponible**")
-                st.link_button("📩 Solicitar acceso completo",
-                    f"mailto:{CONTACT_EMAIL}?subject=Acceso {tipo.upper()} {producto} {anio}")
+                st.link_button(
+                    "📩 Solicitar acceso completo",
+                    f"mailto:{CONTACT_EMAIL}?subject=Acceso {tipo.upper()} {producto} {anio}"
+                )
         except:
             st.info("📌 Información en proceso de mejora")
 
     if st.session_state.role=="admin":
         st.subheader("🛠 Gestión de usuarios")
         users=pd.read_csv(USERS_FILE)
+        perms=pd.read_csv(PERMISSIONS_FILE)
+
         for i,r in users.iterrows():
-            if r.usuario!=ADMIN_USER:
-                users.loc[i,"rol"]=st.selectbox(
-                    r.usuario,["freemium","premium"],
-                    index=0 if r.rol=="freemium" else 1,
-                    key=f"rol_{i}")
+            if r.usuario==ADMIN_USER: continue
+
+            users.loc[i,"rol"]=st.selectbox(
+                r.usuario,["freemium","premium"],
+                index=0 if r.rol=="freemium" else 1,
+                key=f"rol_{i}"
+            )
+
+            if users.loc[i,"rol"]=="premium":
+                with st.expander(f"Permisos – {r.usuario}"):
+                    producto_p=st.selectbox("Producto",["uva","mango","arandano","limon","palta"],key=f"p{i}")
+                    anio_p=st.selectbox("Año",sorted(DRIVE_MAP["envios"].keys()),key=f"a{i}")
+                    mes_p=st.selectbox("Mes",MESES,key=f"m{i}")
+                    fi=st.date_input("Fecha inicio",key=f"fi{i}")
+                    ff=st.date_input("Fecha fin",key=f"ff{i}")
+
+                    if st.button("Guardar permiso",key=f"s{i}"):
+                        perms.loc[len(perms)]=[r.usuario,producto_p,anio_p,mes_p,fi,ff]
+                        perms.to_csv(PERMISSIONS_FILE,index=False)
+                        st.success("Permiso guardado")
+
         users.to_csv(USERS_FILE,index=False)
 
 # =====================================================
 # MAIN
 # =====================================================
 init_users()
+init_permissions()
 auth() if not st.session_state.logged else dashboard()
