@@ -1,216 +1,210 @@
 import streamlit as st
 import pandas as pd
-import os
+import re
 
-# ==================================================
+# =============================
 # CONFIGURACIÓN GENERAL
-# ==================================================
-st.set_page_config(page_title="Data Core", layout="wide")
+# =============================
+st.set_page_config(
+    page_title="Data Core – Inteligencia Agroexportadora",
+    layout="wide"
+)
 
-ADMIN_USER = "admin"
-ADMIN_PASS = "admin123"
+# =============================
+# USUARIOS (MVP)
+# =============================
+USERS = {
+    "admin": {
+        "password": "admin123",
+        "role": "admin"
+    }
+}
 
-LOGO_PATH = "logo_datacore.jpg"
-MAIL_TO = "datacore.agrotech@gmail.com"
+# =============================
+# MAPA DE ARCHIVOS (Drive)
+# =============================
+DATA_MAP = {
+    # ---- 2025 ----
+    (2025, "envio", "uva"): "1iw-OafOHph_epXgf-6kreXhq2GxzNqyN",
+    (2025, "envio", "mango"): "1-f5tlde1nBJnl_9BbRJkaDpGBleYtbyG",
+    (2025, "envio", "arandano"): "1TxC9TwgFojnNRkQlOI27KJBzG0TK7tp7",
+    (2025, "envio", "limon"): "1G8VbTnSeOcJJVDRkze9s12TRts5BvQx6",
+    (2025, "envio", "palta"): "1Qt680UXFnKBh7bdV0iGqnJKKmc1suNVA",
 
-# ==================================================
-# FUNCIONES AUXILIARES
-# ==================================================
-def load_csv(file):
-    if not os.path.exists(file):
-        return pd.DataFrame()
+    (2025, "campo", "uva"): "15R-9ECTNpSQM1FC8tFPUs0emE16H8cHT",
+    (2025, "campo", "mango"): "11IziWG98PfqkSyTaK5GvKwU4NEC9LwXJ",
+    (2025, "campo", "arandano"): "15w2FG2TT_qPfxEksBgcGbfPu67yNbvYT",
+    (2025, "campo", "limon"): "178kHRjqLgs-EFUmzCsNclBKq-nYmVJPO",
+    (2025, "campo", "palta"): "1fo9HKY9DSKAjgLVKsx2H0Y7f_YU4DwRT",
+}
 
-    try:
-        df = pd.read_csv(file, sep=";", encoding="latin1", low_memory=False)
-        if df.shape[1] == 1:
-            df = pd.read_csv(file, sep=",", encoding="latin1", low_memory=False)
-        return df
-    except Exception:
-        return pd.DataFrame()
+PRODUCTS = ["uva", "mango", "arandano", "limon", "palta"]
+YEARS = [2021, 2022, 2023, 2024, 2025]
 
+# =============================
+# UTILIDADES
+# =============================
+MONTH_MAP = {
+    "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
+    "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12
+}
 
-def limit_rows(df, is_admin):
-    return df if is_admin else df.head(3)
+def normalize_month(val):
+    if pd.isna(val):
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    val = str(val).strip().lower()
+    if val.isdigit():
+        return int(val)
+    val = val[:3]
+    return MONTH_MAP.get(val)
 
-
-def find_col(df, keywords):
-    if isinstance(keywords, str):
-        keywords = [keywords]
-
-    for key in keywords:
-        for c in df.columns:
-            if key.lower() in c.lower():
-                return c
+def find_column(df, keywords):
+    for col in df.columns:
+        c = col.lower()
+        if any(k in c for k in keywords):
+            return col
     return None
 
-# ==================================================
-# AUTENTICACIÓN
-# ==================================================
+@st.cache_data(show_spinner=False)
+def load_data(year, tipo, producto):
+    file_id = DATA_MAP.get((year, tipo, producto))
+    if not file_id:
+        return None
+    url = f"https://drive.google.com/uc?id={file_id}"
+    try:
+        df = pd.read_csv(url)
+        return df
+    except Exception:
+        return None
+
+# =============================
+# LOGIN / REGISTRO
+# =============================
 def auth_screen():
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=180)
+    st.markdown("## 🔐 Data Core – Acceso")
+    try:
+        st.image("logo_datacore.jpg", width=200)
+    except:
+        pass
 
-    st.title("Data Core – Agroexport Intelligence")
+    tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
 
-    tab_login, tab_register = st.tabs(["Login", "Register"])
+    with tab1:
+        u = st.text_input("Usuario", key="login_user")
+        p = st.text_input("Contraseña", type="password", key="login_pass")
+        if st.button("Ingresar"):
+            if u in USERS and USERS[u]["password"] == p:
+                st.session_state.user = u
+                st.session_state.role = USERS[u]["role"]
+                st.experimental_rerun()
+            else:
+                st.error("Credenciales incorrectas")
 
-    with tab_login:
-        user = st.text_input("User", key="login_user")
-        pwd = st.text_input("Password", type="password", key="login_pwd")
-
-        if st.button("Login"):
-            if user == ADMIN_USER and pwd == ADMIN_PASS:
-                st.session_state.user = user
-                st.session_state.role = "ADMIN"
-            elif user:
-                st.session_state.user = user
-                st.session_state.role = "FREEMIUM"
-
-    with tab_register:
-        st.text_input("First name")
-        st.text_input("Last name")
+    with tab2:
+        st.info("Registro habilitado (MVP – acceso Freemium)")
+        st.text_input("Nombre")
+        st.text_input("Apellido")
         st.text_input("DNI")
-        st.text_input("Email")
-        st.text_input("Phone")
-        st.text_input("Company (optional)")
-        st.text_input("Position (optional)")
-        st.text_input("User ID")
-        st.text_input("Password", type="password")
-        st.text_input("Repeat password", type="password")
-        st.button("Register")
+        st.text_input("Correo electrónico")
+        st.text_input("Celular")
+        st.text_input("Usuario deseado")
+        st.text_input("Contraseña", type="password")
+        st.text_input("Repetir contraseña", type="password")
+        st.text_input("Empresa (opcional)")
+        st.text_input("Cargo (opcional)")
+        st.button("Registrarse")
 
-# ==================================================
-# CONTROL DE SESIÓN
-# ==================================================
-if "user" not in st.session_state:
-    auth_screen()
-    st.stop()
-
-is_admin = st.session_state.role == "ADMIN"
-
-# ==================================================
-# SIDEBAR
-# ==================================================
-with st.sidebar:
-    if os.path.exists(LOGO_PATH):
-        st.image(LOGO_PATH, width=160)
-
-    st.markdown(f"**User:** {st.session_state.user}")
-    st.markdown(f"**Role:** {st.session_state.role}")
-
-# ==================================================
-# CARGA DE DATOS
-# ==================================================
-shipments = pd.concat(
-    [
-        load_csv("datos_reales.csv"),
-        load_csv("data_arandano_1_6.csv"),
-    ],
-    ignore_index=True
-)
-
-campo = pd.concat(
-    [
-        load_csv("data_campo_limon_2025.csv"),
-        load_csv("data_campo_arandano_2025.csv"),
-    ],
-    ignore_index=True
-)
-
-# ==================================================
+# =============================
 # DASHBOARD
-# ==================================================
-st.title("📊 Data Core – Dashboard")
+# =============================
+def dashboard():
+    st.sidebar.image("logo_datacore.jpg", width=160)
+    st.sidebar.markdown("### Freemium")
+    st.sidebar.markdown("Acceso limitado")
 
-# ==================================================
-# ENVÍOS
-# ==================================================
-st.header("📦 Shipments")
+    st.title("📊 Data Core – Dashboard")
 
-if not shipments.empty:
-    col_product = find_col(shipments, "producto")
-    col_country = find_col(shipments, "pais")
-    col_month = find_col(shipments, "mes")
-    col_year = find_col(shipments, "año")
+    # -------------------------
+    # ENVÍOS
+    # -------------------------
+    st.header("📦 Envíos")
 
-    product = st.selectbox(
-        "Product",
-        sorted(shipments[col_product].dropna().unique())
+    col1, col2, col3 = st.columns(3)
+    product = col1.selectbox("Producto", PRODUCTS)
+    year = col2.selectbox("Año", YEARS)
+    month_filter = col3.selectbox(
+        "Mes",
+        ["Todos"] + list(range(1, 13))
     )
 
-    df_ship = shipments[shipments[col_product] == product]
+    df = load_data(year, "envio", product)
 
-    if col_year:
-        year = st.selectbox("Year", sorted(df_ship[col_year].dropna().unique()))
-        df_ship = df_ship[df_ship[col_year] == year]
+    if df is None or df.empty:
+        st.warning("📌 Información en proceso de mejora para este producto/año.")
+    else:
+        col_month = find_column(df, ["mes"])
+        col_country = find_column(df, ["pais", "destino"])
 
-    if col_month:
-        month = st.selectbox("Month", sorted(df_ship[col_month].dropna().unique()))
-        df_ship = df_ship[df_ship[col_month] == month]
+        if col_month:
+            df["mes_norm"] = df[col_month].apply(normalize_month)
+            if month_filter != "Todos":
+                df = df[df["mes_norm"] == month_filter]
 
-    if col_country:
-        country = st.selectbox(
-            "Destination country",
-            ["All"] + sorted(df_ship[col_country].dropna().unique())
-        )
-        if country != "All":
-            df_ship = df_ship[df_ship[col_country] == country]
+        if col_country:
+            country = st.selectbox(
+                "País destino",
+                ["Todos"] + sorted(df[col_country].dropna().unique().tolist())
+            )
+            if country != "Todos":
+                df = df[df[col_country] == country]
 
-    st.dataframe(limit_rows(df_ship, is_admin))
+        if st.session_state.role != "admin":
+            st.dataframe(df.head(3))
+            st.markdown(
+                "🔓 **Acceso completo:** "
+                "[Adquirir data completa aquí](mailto:datacore.agrotech@gmail.com)"
+            )
+        else:
+            st.dataframe(df)
 
-    if not is_admin:
-        st.markdown(
-            f"🔓 **Acceso completo:** "
-            f"<a href='mailto:{MAIL_TO}?subject=Solicitud Data Envíos – {product}' target='_blank'>"
-            f"Adquirir data completa aquí</a>",
-            unsafe_allow_html=True
-        )
+    # -------------------------
+    # CAMPOS
+    # -------------------------
+    st.header("🌾 Campos certificados")
 
-# ==================================================
-# CAMPOS CERTIFICADOS
-# ==================================================
-st.header("🌾 Certified Fields")
+    col4, col5, col6 = st.columns(3)
+    product_c = col4.selectbox("Producto (campo)", PRODUCTS)
+    year_c = col5.selectbox("Año (campo)", YEARS)
+    month_c = col6.selectbox("Mes (campo)", ["Todos"] + list(range(1, 13)))
 
-if not campo.empty:
-    col_cultivo = find_col(campo, ["cultivo", "producto", "cientifico"])
-    col_year_c = find_col(campo, ["año certificacion", "año"])
-    col_month_c = find_col(campo, ["mes certificacion", "mes"])
+    dfc = load_data(year_c, "campo", product_c)
 
-    df_campo = campo.copy()
+    if dfc is None or dfc.empty:
+        st.warning("📌 Información de campos en proceso de mejora.")
+    else:
+        col_month_c = find_column(dfc, ["mes"])
+        if col_month_c:
+            dfc["mes_norm"] = dfc[col_month_c].apply(normalize_month)
+            if month_c != "Todos":
+                dfc = dfc[dfc["mes_norm"] == month_c]
 
-    if col_cultivo:
-        cultivo = st.selectbox(
-            "Crop / Product",
-            sorted(df_campo[col_cultivo].dropna().unique())
-        )
-        df_campo = df_campo[df_campo[col_cultivo] == cultivo]
+        if st.session_state.role != "admin":
+            st.dataframe(dfc.head(3))
+            st.markdown(
+                "🔓 **Acceso completo:** "
+                "[Adquirir data completa aquí](mailto:datacore.agrotech@gmail.com)"
+            )
+        else:
+            st.dataframe(dfc)
 
-    if col_year_c:
-        year_c = st.selectbox(
-            "Certification Year",
-            sorted(df_campo[col_year_c].dropna().unique())
-        )
-        df_campo = df_campo[df_campo[col_year_c] == year_c]
+    st.markdown("✅ **Data Core – MVP estable | Escalable | 13G Ready**")
 
-    if col_month_c:
-        month_c = st.selectbox(
-            "Certification Month",
-            sorted(df_campo[col_month_c].dropna().unique())
-        )
-        df_campo = df_campo[df_campo[col_month_c] == month_c]
-
-    st.dataframe(limit_rows(df_campo, is_admin))
-
-    if not is_admin:
-        st.markdown(
-            f"🔓 **Acceso completo:** "
-            f"<a href='mailto:{MAIL_TO}?subject=Solicitud Data Campos Certificados' target='_blank'>"
-            f"Adquirir data completa aquí</a>",
-            unsafe_allow_html=True
-        )
-
-# ==================================================
-# FOOTER
-# ==================================================
-st.markdown("---")
-st.caption("✅ Data Core – MVP estable | Suscripción por producto")
+# =============================
+# APP FLOW
+# =============================
+if "user" not in st.session_state:
+    auth_screen()
+else:
+    dashboard()
