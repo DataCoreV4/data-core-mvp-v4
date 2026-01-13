@@ -18,27 +18,22 @@ UPSELL_EMAIL = "datacore.agrotech@gmail.com"
 USERS_FILE = "users.csv"
 
 # ===============================
-# GOOGLE DRIVE MAP
+# GOOGLE DRIVE MAP (BASE)
 # ===============================
 DRIVE_MAP = {
-    # ENVÍOS
     ("envios", "uva", 2021): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
-    ("envios", "mango", 2021): "1k6CxjPufa0YF17e264BI8NYO1rFFZuc7",
-    ("envios", "arandano", 2021): "1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9",
-    ("envios", "limon", 2021): "1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8",
-    ("envios", "palta", 2021): "1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ",
-    # CAMPO
     ("campo", "uva", 2021): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    ("campo", "mango", 2021): "1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu",
-    ("campo", "arandano", 2021): "1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4",
-    ("campo", "limon", 2021): "12xOZVXqxvvepb97On1H8feKUoW_u1Qet",
-    ("campo", "palta", 2021): "1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO",
-    # 👉 AÑOS SIGUIENTES YA ESTÁN SOPORTADOS
 }
 
 # ===============================
 # HELPERS
 # ===============================
+def show_logo():
+    for f in ["logo.png", "logo.jpg", "logo.jpeg"]:
+        if os.path.exists(f):
+            st.image(f, width=140)
+            return
+
 def load_drive_csv(file_id):
     url = f"https://drive.google.com/uc?export=download&id={file_id}"
     r = requests.get(url)
@@ -73,8 +68,8 @@ def normalize_month(val):
 def init_users():
     if not os.path.exists(USERS_FILE):
         df = pd.DataFrame(columns=[
-            "usuario", "password", "nombre", "apellido",
-            "dni", "correo", "tipo"
+            "usuario", "password", "nombre",
+            "apellido", "dni", "correo", "tipo"
         ])
         df.to_csv(USERS_FILE, index=False)
 
@@ -88,6 +83,7 @@ def save_users(df):
 # AUTH
 # ===============================
 def auth_screen():
+    show_logo()
     st.markdown("## 🔐 Data Core – Acceso")
 
     tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
@@ -95,20 +91,21 @@ def auth_screen():
     with tab1:
         u = st.text_input("Usuario", key="login_user")
         p = st.text_input("Contraseña", type="password", key="login_pass")
+
         if st.button("Ingresar"):
             if u == ADMIN_USER and p == ADMIN_PASS:
                 st.session_state.user = u
                 st.session_state.tipo = "admin"
                 st.rerun()
+
+            users = load_users()
+            match = users[(users.usuario == u) & (users.password == p)]
+            if not match.empty:
+                st.session_state.user = u
+                st.session_state.tipo = match.iloc[0]["tipo"]
+                st.rerun()
             else:
-                users = load_users()
-                match = users[(users.usuario == u) & (users.password == p)]
-                if not match.empty:
-                    st.session_state.user = u
-                    st.session_state.tipo = match.iloc[0]["tipo"]
-                    st.rerun()
-                else:
-                    st.error("Credenciales incorrectas")
+                st.error("Credenciales incorrectas")
 
     with tab2:
         st.subheader("Registro")
@@ -138,10 +135,11 @@ def auth_screen():
                 st.success("Registro exitoso")
 
 # ===============================
-# DASHBOARD
+# DATA SECTIONS
 # ===============================
 def show_section(tipo, producto, year, mes, is_admin):
     key = (tipo, producto, year)
+
     if key not in DRIVE_MAP:
         st.info("📌 Información en proceso de mejora.")
         return
@@ -158,21 +156,29 @@ def show_section(tipo, producto, year, mes, is_admin):
         df = df[df["mes_norm"] == mes]
 
     if not is_admin:
-        df = df.head(3)
-        st.dataframe(df)
+        st.dataframe(df.head(3))
         st.warning(
-            f"🔓 Acceso completo: solicitar data completa escribiendo a {UPSELL_EMAIL}"
+            f"🔓 Acceso completo escribiendo a {UPSELL_EMAIL}"
         )
     else:
         st.dataframe(df)
 
+# ===============================
+# DASHBOARD
+# ===============================
 def dashboard():
-    st.image("logo.png", width=120)
+    show_logo()
     st.markdown(f"### 👋 Bienvenido, **{st.session_state.user}**")
 
-    producto = st.selectbox("Producto", ["uva", "mango", "arandano", "limon", "palta"])
-    year = st.selectbox("Año", [2021, 2022, 2023, 2024, 2025])
-    mes = st.selectbox("Mes", ["Todos"] + list(range(1, 13)))
+    producto = st.selectbox(
+        "Producto", ["uva", "mango", "arandano", "limon", "palta"]
+    )
+    year = st.selectbox(
+        "Año", [2021, 2022, 2023, 2024, 2025]
+    )
+    mes = st.selectbox(
+        "Mes", ["Todos"] + list(range(1, 13))
+    )
 
     col1, col2 = st.columns(2)
 
