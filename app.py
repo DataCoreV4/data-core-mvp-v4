@@ -137,10 +137,12 @@ def auth_screen():
     st.title("🔐 Data Core – Acceso")
     tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
 
+    # ---------- LOGIN ----------
     with tab1:
-        u = st.text_input("Usuario")
-        p = st.text_input("Contraseña", type="password")
-        if st.button("Ingresar"):
+        u = st.text_input("Usuario", key="login_user")
+        p = st.text_input("Contraseña", type="password", key="login_pass")
+
+        if st.button("Ingresar", key="login_btn"):
             df = load_users()
             row = df[(df.usuario == u) & (df.password == p)]
             if not row.empty:
@@ -149,34 +151,45 @@ def auth_screen():
             else:
                 st.error("Usuario o contraseña incorrectos")
 
+    # ---------- REGISTRO ----------
     with tab2:
-        data = {}
-        for f in ["Usuario","Contraseña","Repetir contraseña","Nombre","Apellido","DNI","Correo","Celular","Empresa","Cargo"]:
-            data[f] = st.text_input(f)
+        reg_usuario = st.text_input("Usuario", key="reg_usuario")
+        reg_pass = st.text_input("Contraseña", type="password", key="reg_pass")
+        reg_pass2 = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
+        reg_nombre = st.text_input("Nombre", key="reg_nombre")
+        reg_apellido = st.text_input("Apellido", key="reg_apellido")
+        reg_dni = st.text_input("DNI", key="reg_dni")
+        reg_correo = st.text_input("Correo electrónico", key="reg_correo")
+        reg_celular = st.text_input("Celular", key="reg_celular")
+        reg_empresa = st.text_input("Empresa (opcional)", key="reg_empresa")
+        reg_cargo = st.text_input("Cargo (opcional)", key="reg_cargo")
 
-        if st.button("Registrar"):
-            if data["Contraseña"] != data["Repetir contraseña"]:
+        if st.button("Registrar", key="reg_btn"):
+            if reg_pass != reg_pass2:
                 st.error("Las contraseñas no coinciden")
                 return
+
             df = load_users()
-            if data["Usuario"] in df.usuario.values:
-                st.error("Usuario ya existe")
+            if reg_usuario in df.usuario.values:
+                st.error("El usuario ya existe")
                 return
+
             new = {
-                "usuario": data["Usuario"],
-                "password": data["Contraseña"],
+                "usuario": reg_usuario,
+                "password": reg_pass,
                 "rol": "freemium",
-                "nombre": data["Nombre"],
-                "apellido": data["Apellido"],
-                "dni": data["DNI"],
-                "correo": data["Correo"],
-                "celular": data["Celular"],
-                "empresa": data["Empresa"],
-                "cargo": data["Cargo"]
+                "nombre": reg_nombre,
+                "apellido": reg_apellido,
+                "dni": reg_dni,
+                "correo": reg_correo,
+                "celular": reg_celular,
+                "empresa": reg_empresa,
+                "cargo": reg_cargo
             }
+
             df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
             save_users(df)
-            st.success("Registro exitoso")
+            st.success("Registro exitoso. Ahora puede ingresar.")
 
 # ======================================================
 # DASHBOARD
