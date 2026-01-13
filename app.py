@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import os
 
-# =============================
-# CONFIGURACIÓN GENERAL
-# =============================
+# =========================================
+# CONFIGURACIÓN
+# =========================================
 st.set_page_config(page_title="Data Core – Acceso", layout="centered")
 
 USERS_FILE = "users.csv"
@@ -12,85 +12,78 @@ USERS_FILE = "users.csv"
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 
-# =============================
-# UTILIDADES
-# =============================
+# =========================================
+# INICIALIZACIÓN DE USUARIOS
+# =========================================
+def init_users():
+    columns = [
+        "usuario", "password", "rol",
+        "nombre", "apellido", "dni",
+        "email", "celular", "empresa", "cargo"
+    ]
 
-def init_users_file():
     if not os.path.exists(USERS_FILE):
-        df = pd.DataFrame(columns=[
-            "usuario", "password", "rol",
-            "nombre", "apellido", "dni",
-            "email", "celular", "empresa", "cargo"
-        ])
+        df = pd.DataFrame(columns=columns)
         df.to_csv(USERS_FILE, index=False)
 
-def load_users():
-    return pd.read_csv(USERS_FILE)
+    df = pd.read_csv(USERS_FILE)
 
-def save_users(df):
+    # 🔥 FORZAR ADMIN SIEMPRE
+    df = df[df["usuario"] != ADMIN_USER]
+
+    admin_row = {
+        "usuario": ADMIN_USER,
+        "password": ADMIN_PASS,
+        "rol": "admin",
+        "nombre": "Administrador",
+        "apellido": "DataCore",
+        "dni": "",
+        "email": "",
+        "celular": "",
+        "empresa": "",
+        "cargo": ""
+    }
+
+    df = pd.concat([df, pd.DataFrame([admin_row])], ignore_index=True)
     df.to_csv(USERS_FILE, index=False)
 
-def ensure_admin():
-    df = load_users()
-    if ADMIN_USER not in df["usuario"].values:
-        admin_row = {
-            "usuario": ADMIN_USER,
-            "password": ADMIN_PASS,
-            "rol": "admin",
-            "nombre": "Administrador",
-            "apellido": "DataCore",
-            "dni": "",
-            "email": "",
-            "celular": "",
-            "empresa": "",
-            "cargo": ""
-        }
-        df = pd.concat([df, pd.DataFrame([admin_row])], ignore_index=True)
-        save_users(df)
-
-# =============================
+# =========================================
 # SESIÓN
-# =============================
+# =========================================
+if "logged" not in st.session_state:
+    st.session_state.logged = False
+    st.session_state.user = ""
+    st.session_state.role = ""
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user = None
-    st.session_state.role = None
-
-# =============================
+# =========================================
 # LOGIN / REGISTRO
-# =============================
-
-def auth_screen():
+# =========================================
+def auth():
     st.title("🔐 Data Core – Acceso")
 
-    tab_login, tab_register = st.tabs(["Ingresar", "Registrarse"])
+    tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
 
-    # -------- LOGIN --------
-    with tab_login:
-        username = st.text_input("Usuario", key="login_user")
-        password = st.text_input("Contraseña", type="password", key="login_pass")
+    # ---------- LOGIN ----------
+    with tab1:
+        user = st.text_input("Usuario", key="login_user")
+        pwd = st.text_input("Contraseña", type="password", key="login_pass")
 
         if st.button("Ingresar"):
-            df = load_users()
-            match = df[
-                (df["usuario"] == username) &
-                (df["password"] == password)
-            ]
+            df = pd.read_csv(USERS_FILE)
+            ok = df[(df.usuario == user) & (df.password == pwd)]
 
-            if not match.empty:
-                st.session_state.logged_in = True
-                st.session_state.user = username
-                st.session_state.role = match.iloc[0]["rol"]
+            if not ok.empty:
+                st.session_state.logged = True
+                st.session_state.user = user
+                st.session_state.role = ok.iloc[0]["rol"]
                 st.success("Ingreso exitoso")
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
 
-    # -------- REGISTRO --------
-    with tab_register:
-        with st.form("register_form"):
+    # ---------- REGISTRO ----------
+    with tab2:
+        with st.form("register"):
             usuario = st.text_input("Usuario")
             password = st.text_input("Contraseña", type="password")
             password2 = st.text_input("Repetir contraseña", type="password")
@@ -110,12 +103,13 @@ def auth_screen():
                     st.error("Las contraseñas no coinciden")
                     return
 
-                df = load_users()
-                if usuario in df["usuario"].values:
+                df = pd.read_csv(USERS_FILE)
+
+                if usuario in df.usuario.values:
                     st.error("El usuario ya existe")
                     return
 
-                new_user = {
+                new = {
                     "usuario": usuario,
                     "password": password,
                     "rol": "freemium",
@@ -128,38 +122,38 @@ def auth_screen():
                     "cargo": cargo
                 }
 
-                df = pd.concat([df, pd.DataFrame([new_user])], ignore_index=True)
-                save_users(df)
-                st.success("Registro exitoso. Ahora puedes ingresar.")
+                df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
+                df.to_csv(USERS_FILE, index=False)
 
-# =============================
-# DASHBOARD BASE (VACÍO)
-# =============================
+                st.success("Registro exitoso. Ya puedes ingresar.")
 
+# =========================================
+# DASHBOARD BASE
+# =========================================
 def dashboard():
     st.success(f"👋 Bienvenido, {st.session_state.user}")
 
     if st.session_state.role == "admin":
-        st.info("Modo administrador activo")
+        st.info("Acceso administrador completo")
     else:
-        st.info("Modo usuario freemium")
+        st.info("Acceso freemium (limitado)")
 
-    st.warning("Dashboard base estable. Data se conectará en la siguiente capa.")
+    st.divider()
+
+    st.warning("Dashboard base estable. La conexión con Drive y filtros avanzados se activarán en la siguiente capa.")
 
     if st.button("Cerrar sesión"):
-        st.session_state.logged_in = False
-        st.session_state.user = None
-        st.session_state.role = None
+        st.session_state.logged = False
+        st.session_state.user = ""
+        st.session_state.role = ""
         st.rerun()
 
-# =============================
+# =========================================
 # MAIN
-# =============================
+# =========================================
+init_users()
 
-init_users_file()
-ensure_admin()
-
-if not st.session_state.logged_in:
-    auth_screen()
+if not st.session_state.logged:
+    auth()
 else:
     dashboard()
