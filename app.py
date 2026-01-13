@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import os
 from io import BytesIO
 
 # ======================================
@@ -16,7 +17,7 @@ CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 USERS_FILE = "users.csv"
 
 # ======================================
-# USUARIOS – CARGA SEGURA
+# USUARIOS – ESTRUCTURA
 # ======================================
 EXPECTED_COLUMNS = [
     "usuario", "password", "nombre", "apellido",
@@ -26,13 +27,9 @@ EXPECTED_COLUMNS = [
 def load_users():
     try:
         df = pd.read_csv(USERS_FILE)
-
-        # Si faltan columnas → reconstruir
         if not set(EXPECTED_COLUMNS).issubset(df.columns):
-            raise ValueError("Estructura inválida")
-
+            raise ValueError
         return df
-
     except Exception:
         df = pd.DataFrame(columns=EXPECTED_COLUMNS)
         df.to_csv(USERS_FILE, index=False)
@@ -42,14 +39,10 @@ def save_users(df):
     df.to_csv(USERS_FILE, index=False)
 
 # ======================================
-# ADMIN SEGURO
+# ADMIN
 # ======================================
 def ensure_admin():
     users = load_users()
-
-    if "usuario" not in users.columns:
-        users = pd.DataFrame(columns=EXPECTED_COLUMNS)
-
     if not (users["usuario"].str.upper() == "DCADMIN").any():
         admin = pd.DataFrame([{
             "usuario": "DCADMIN",
@@ -66,12 +59,11 @@ def ensure_admin():
 ensure_admin()
 
 # ======================================
-# GOOGLE DRIVE MAP
+# DRIVE DATA MAP
 # ======================================
 DRIVE_MAP = {
-    ("envios","uva",2021): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
-    ("campo","uva",2021): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    # 👉 sigue agregando aquí sin romper nada
+    ("envios", "uva", 2021): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
+    ("campo", "uva", 2021): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
 }
 
 # ======================================
@@ -108,23 +100,19 @@ def normalize_month(val):
     return None
 
 # ======================================
-# AUTH
+# LOGIN / REGISTRO
 # ======================================
 def auth_screen():
-    st.title("🔐 Data Core – Acceso")
+    st.title("🔐 Acceso – Data Core")
 
     tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
 
     with tab1:
-        u = st.text_input("Usuario", key="login_user")
-        p = st.text_input("Contraseña", type="password", key="login_pass")
-
+        u = st.text_input("Usuario")
+        p = st.text_input("Contraseña", type="password")
         if st.button("Ingresar"):
             users = load_users()
-            match = users[
-                (users["usuario"] == u) &
-                (users["password"] == p)
-            ]
+            match = users[(users["usuario"] == u) & (users["password"] == p)]
             if not match.empty:
                 st.session_state.user = match.iloc[0].to_dict()
                 st.rerun()
@@ -135,8 +123,8 @@ def auth_screen():
         nombre = st.text_input("Nombre")
         apellido = st.text_input("Apellido")
         dni = st.text_input("DNI")
-        email = st.text_input("Correo electrónico")
-        usuario = st.text_input("Usuario nuevo")
+        email = st.text_input("Correo")
+        usuario = st.text_input("Usuario")
         password = st.text_input("Contraseña", type="password")
 
         if st.button("Registrarse"):
@@ -155,7 +143,7 @@ def auth_screen():
                 }
                 users = pd.concat([users, pd.DataFrame([nuevo])])
                 save_users(users)
-                st.success("Registro exitoso. Ya puedes ingresar.")
+                st.success("Registro exitoso")
 
 # ======================================
 # DASHBOARD
@@ -163,69 +151,50 @@ def auth_screen():
 def dashboard():
     user = st.session_state.user
 
-    st.image(LOGO_PATH, width=120)
+    # LOGO SEGURO
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, width=120)
+    else:
+        st.markdown("## 🟢 Data Core")
+
     st.markdown(f"👋 **Bienvenido, {user['nombre']}**")
 
     col1, col2, col3 = st.columns(3)
-    producto = col1.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
+    producto = col1.selectbox("Producto", ["uva","mango","palta","limon"])
     año = col2.selectbox("Año", list(range(2021, 2026)))
     mes = col3.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
-    # ===============================
     # ENVÍOS
-    # ===============================
     st.subheader("📦 Envíos")
     key = ("envios", producto, año)
-
     if key in DRIVE_MAP:
         df = load_drive_csv(DRIVE_MAP[key])
-
         for c in df.columns:
             if "mes" in c.lower():
                 df["_mes"] = df[c].apply(normalize_month)
                 break
-
         if mes != "Todos":
             df = df[df["_mes"] == mes]
-
-        if user["tipo"] == "freemium":
-            st.dataframe(df.head(3))
-            st.info("🔓 Acceso completo: Adquirir data completa aquí")
-            st.markdown(f"[Enviar solicitud](mailto:{CONTACT_EMAIL})")
-        else:
-            st.dataframe(df)
+        st.dataframe(df.head(3) if user["tipo"]=="freemium" else df)
     else:
         st.info("📌 Información en proceso de mejora.")
 
-    # ===============================
-    # CAMPO
-    # ===============================
+    # CAMPOS
     st.subheader("🌾 Campos certificados")
     key = ("campo", producto, año)
-
     if key in DRIVE_MAP:
-        dfc = load_drive_csv(DRIVE_MAP[key])
-
-        for c in dfc.columns:
+        df = load_drive_csv(DRIVE_MAP[key])
+        for c in df.columns:
             if "mes" in c.lower():
-                dfc["_mes"] = dfc[c].apply(normalize_month)
+                df["_mes"] = df[c].apply(normalize_month)
                 break
-
         if mes != "Todos":
-            dfc = dfc[dfc["_mes"] == mes]
-
-        if user["tipo"] == "freemium":
-            st.dataframe(dfc.head(3))
-            st.info("🔓 Acceso completo: Adquirir data completa aquí")
-            st.markdown(f"[Enviar solicitud](mailto:{CONTACT_EMAIL})")
-        else:
-            st.dataframe(dfc)
+            df = df[df["_mes"] == mes]
+        st.dataframe(df.head(3) if user["tipo"]=="freemium" else df)
     else:
-        st.info("📌 Información de campos en proceso de mejora.")
+        st.info("📌 Información en proceso de mejora.")
 
-    # ===============================
     # ADMIN
-    # ===============================
     if user["tipo"] == "admin":
         st.subheader("🛠 Gestión de usuarios")
         users = load_users()
@@ -233,7 +202,7 @@ def dashboard():
             colA, colB = st.columns([4,1])
             colA.write(f"{r['usuario']} – {r['tipo']}")
             if r["tipo"] == "freemium":
-                if colB.button("Hacer Premium", key=f"up_{i}"):
+                if colB.button("Premium", key=f"up_{i}"):
                     users.at[i,"tipo"] = "premium"
                     save_users(users)
                     st.rerun()
