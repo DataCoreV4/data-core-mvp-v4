@@ -5,7 +5,7 @@ from io import BytesIO
 import os
 
 # =========================
-# CONFIG
+# CONFIGURACIÓN GENERAL
 # =========================
 st.set_page_config(page_title="Data Core", layout="wide")
 
@@ -18,13 +18,12 @@ CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 os.makedirs("data", exist_ok=True)
 
 # =========================
-# DRIVE MAP (ENVÍOS / CAMPO)
+# MAPA DRIVE (ejemplo)
 # =========================
 DRIVE_MAP = {
-    # ejemplo (completo según tu tabla)
     ("envios", "uva", 2021): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
     ("campo", "uva", 2021): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    # ⚠️ aquí va TODA la tabla que ya definimos
+    # 👉 aquí sigue TODA tu tabla real
 }
 
 # =========================
@@ -32,7 +31,7 @@ DRIVE_MAP = {
 # =========================
 def load_drive_csv(file_id):
     url = f"https://drive.google.com/uc?id={file_id}"
-    r = requests.get(url)
+    r = requests.get(url, timeout=30)
     r.raise_for_status()
     return pd.read_csv(
         BytesIO(r.content),
@@ -40,25 +39,26 @@ def load_drive_csv(file_id):
         engine="python",
         encoding="utf-8",
         low_memory=False,
+        on_bad_lines="skip"
     )
 
 def normalize_month(val):
     if pd.isna(val):
         return None
-    m = str(val).strip().lower()
-    months = {
-        "ene": 1, "feb": 2, "mar": 3, "abr": 4, "may": 5, "jun": 6,
-        "jul": 7, "ago": 8, "sep": 9, "oct": 10, "nov": 11, "dic": 12
+    v = str(val).lower().strip()
+    meses = {
+        "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
+        "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
     }
-    if m.isdigit():
-        return int(m)
-    for k, v in months.items():
-        if k in m:
-            return v
+    if v.isdigit():
+        return int(v)
+    for k,m in meses.items():
+        if k in v:
+            return m
     return None
 
 # =========================
-# USERS
+# USUARIOS
 # =========================
 def ensure_admin():
     if not os.path.exists(USERS_FILE):
@@ -84,7 +84,7 @@ def ensure_admin():
 ensure_admin()
 
 # =========================
-# AUTH
+# AUTENTICACIÓN
 # =========================
 def auth_screen():
     st.markdown("## 🔐 Data Core – Acceso")
@@ -122,63 +122,71 @@ def auth_screen():
 # =========================
 # DASHBOARD
 # =========================
+def render_section(tipo, producto, año, mes, user, filtro_pais=False):
+    key = (tipo, producto, año)
+
+    if key not in DRIVE_MAP:
+        st.info("📌 Información en proceso de mejora.")
+        return
+
+    try:
+        df = load_drive_csv(DRIVE_MAP[key])
+
+        for c in df.columns:
+            if "mes" in c.lower():
+                df["MES_STD"] = df[c].apply(normalize_month)
+
+        if mes != "Todos" and "MES_STD" in df:
+            df = df[df["MES_STD"] == mes]
+
+        if filtro_pais:
+            pais_col = [c for c in df.columns if "pais" in c.lower()]
+            if pais_col:
+                pais = st.selectbox("País Destino", ["Todos"] + sorted(df[pais_col[0]].dropna().unique()))
+                if pais != "Todos":
+                    df = df[df[pais_col[0]] == pais]
+
+        if df.empty:
+            st.info("📌 Información en proceso de mejora.")
+            return
+
+        if user["rol"] != "admin":
+            st.dataframe(df.head(3), use_container_width=True)
+        else:
+            st.dataframe(df, use_container_width=True)
+
+    except Exception:
+        st.info("📌 Información en proceso de mejora.")
+
 def dashboard():
     user = st.session_state.user
 
-    col1, col2 = st.columns([1, 6])
+    col1, col2 = st.columns([1,6])
     with col1:
         if os.path.exists(LOGO_PATH):
             st.image(LOGO_PATH, width=120)
     with col2:
         st.markdown(f"### 👋 Bienvenido, **{user['usuario']}**")
 
+    st.divider()
+
     producto = st.selectbox("Producto", ["uva","mango","palta","arandano","limon"])
     año = st.selectbox("Año", [2021,2022,2023,2024,2025])
     mes = st.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
-    colA, colB = st.columns(2)
+    st.markdown("## 📦 Envíos")
+    render_section("envios", producto, año, mes, user, filtro_pais=True)
 
-    def render(tipo, col, filtro_pais=False):
-        with col:
-            st.subheader("📦 Envíos" if tipo=="envios" else "🌾 Campos certificados")
-            key = (tipo, producto, año)
-            if key not in DRIVE_MAP:
-                st.info("📌 Información en proceso de mejora.")
-                return
+    st.markdown("## 🌾 Campos certificados")
+    render_section("campo", producto, año, mes, user)
 
-            try:
-                df = load_drive_csv(DRIVE_MAP[key])
+    st.divider()
 
-                # normalizar meses
-                for c in df.columns:
-                    if "mes" in c.lower():
-                        df["MES_STD"] = df[c].apply(normalize_month)
-
-                if mes != "Todos" and "MES_STD" in df:
-                    df = df[df["MES_STD"] == mes]
-
-                if filtro_pais:
-                    pais_col = [c for c in df.columns if "pais" in c.lower()]
-                    if pais_col:
-                        pais = st.selectbox("País Destino", ["Todos"] + sorted(df[pais_col[0]].dropna().unique()))
-                        if pais != "Todos":
-                            df = df[df[pais_col[0]] == pais]
-
-                if df.empty:
-                    st.info("📌 Información en proceso de mejora.")
-                    return
-
-                if user["rol"] != "admin":
-                    st.dataframe(df.head(3))
-                    st.warning(f"🔒 Acceso limitado. Para adquirir data completa escribir a {CONTACT_EMAIL}")
-                else:
-                    st.dataframe(df)
-
-            except Exception as e:
-                st.error("Error cargando data")
-
-    render("envios", colA, filtro_pais=True)
-    render("campo", colB)
+    if user["rol"] != "admin":
+        st.warning(
+            f"🔒 Acceso limitado. Para adquirir la **data completa**, "
+            f"escríbenos a **{CONTACT_EMAIL}**"
+        )
 
 # =========================
 # MAIN
