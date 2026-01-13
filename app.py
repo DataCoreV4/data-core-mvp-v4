@@ -151,7 +151,17 @@ def dashboard():
         st.rerun()
 
     producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
-    anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
+    anios_disponibles = []
+
+if isinstance(DRIVE_MAP, dict) and "envios" in DRIVE_MAP:
+    if isinstance(DRIVE_MAP["envios"], dict):
+        anios_disponibles = sorted(list(DRIVE_MAP["envios"].keys()))
+
+if not anios_disponibles:
+    st.error("❌ No se pudo leer la estructura de años desde DRIVE_MAP")
+    st.stop()
+
+anio = st.selectbox("Año", anios_disponibles)
 
     # =========================
     # ENVÍOS
