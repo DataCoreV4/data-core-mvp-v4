@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import re
 
 # =============================
-# CONFIGURACIÓN GENERAL
+# CONFIGURACIÓN
 # =============================
 st.set_page_config(
     page_title="Data Core – Inteligencia Agroexportadora",
@@ -24,7 +23,6 @@ USERS = {
 # MAPA DE ARCHIVOS (Drive)
 # =============================
 DATA_MAP = {
-    # ---- 2025 ----
     (2025, "envio", "uva"): "1iw-OafOHph_epXgf-6kreXhq2GxzNqyN",
     (2025, "envio", "mango"): "1-f5tlde1nBJnl_9BbRJkaDpGBleYtbyG",
     (2025, "envio", "arandano"): "1TxC9TwgFojnNRkQlOI27KJBzG0TK7tp7",
@@ -57,8 +55,7 @@ def normalize_month(val):
     val = str(val).strip().lower()
     if val.isdigit():
         return int(val)
-    val = val[:3]
-    return MONTH_MAP.get(val)
+    return MONTH_MAP.get(val[:3])
 
 def find_column(df, keywords):
     for col in df.columns:
@@ -74,13 +71,12 @@ def load_data(year, tipo, producto):
         return None
     url = f"https://drive.google.com/uc?id={file_id}"
     try:
-        df = pd.read_csv(url)
-        return df
+        return pd.read_csv(url)
     except Exception:
         return None
 
 # =============================
-# LOGIN / REGISTRO
+# LOGIN
 # =============================
 def auth_screen():
     st.markdown("## 🔐 Data Core – Acceso")
@@ -89,32 +85,16 @@ def auth_screen():
     except:
         pass
 
-    tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
+    user = st.text_input("Usuario")
+    pwd = st.text_input("Contraseña", type="password")
 
-    with tab1:
-        u = st.text_input("Usuario", key="login_user")
-        p = st.text_input("Contraseña", type="password", key="login_pass")
-        if st.button("Ingresar"):
-            if u in USERS and USERS[u]["password"] == p:
-                st.session_state.user = u
-                st.session_state.role = USERS[u]["role"]
-                st.experimental_rerun()
-            else:
-                st.error("Credenciales incorrectas")
-
-    with tab2:
-        st.info("Registro habilitado (MVP – acceso Freemium)")
-        st.text_input("Nombre")
-        st.text_input("Apellido")
-        st.text_input("DNI")
-        st.text_input("Correo electrónico")
-        st.text_input("Celular")
-        st.text_input("Usuario deseado")
-        st.text_input("Contraseña", type="password")
-        st.text_input("Repetir contraseña", type="password")
-        st.text_input("Empresa (opcional)")
-        st.text_input("Cargo (opcional)")
-        st.button("Registrarse")
+    if st.button("Ingresar"):
+        if user in USERS and USERS[user]["password"] == pwd:
+            st.session_state.user = user
+            st.session_state.role = USERS[user]["role"]
+            st.experimental_rerun()
+        else:
+            st.error("Credenciales incorrectas")
 
 # =============================
 # DASHBOARD
@@ -122,22 +102,18 @@ def auth_screen():
 def dashboard():
     st.sidebar.image("logo_datacore.jpg", width=160)
     st.sidebar.markdown("### Freemium")
-    st.sidebar.markdown("Acceso limitado")
 
     st.title("📊 Data Core – Dashboard")
 
-    # -------------------------
+    # =====================
     # ENVÍOS
-    # -------------------------
+    # =====================
     st.header("📦 Envíos")
 
-    col1, col2, col3 = st.columns(3)
-    product = col1.selectbox("Producto", PRODUCTS)
-    year = col2.selectbox("Año", YEARS)
-    month_filter = col3.selectbox(
-        "Mes",
-        ["Todos"] + list(range(1, 13))
-    )
+    c1, c2, c3 = st.columns(3)
+    product = c1.selectbox("Producto", PRODUCTS)
+    year = c2.selectbox("Año", YEARS)
+    month = c3.selectbox("Mes", ["Todos"] + list(range(1, 13)))
 
     df = load_data(year, "envio", product)
 
@@ -149,13 +125,13 @@ def dashboard():
 
         if col_month:
             df["mes_norm"] = df[col_month].apply(normalize_month)
-            if month_filter != "Todos":
-                df = df[df["mes_norm"] == month_filter]
+            if month != "Todos":
+                df = df[df["mes_norm"] == month]
 
         if col_country:
             country = st.selectbox(
                 "País destino",
-                ["Todos"] + sorted(df[col_country].dropna().unique().tolist())
+                ["Todos"] + sorted(df[col_country].dropna().unique())
             )
             if country != "Todos":
                 df = df[df[col_country] == country]
@@ -169,22 +145,27 @@ def dashboard():
         else:
             st.dataframe(df)
 
-    # -------------------------
+    # =====================
     # CAMPOS
-    # -------------------------
+    # =====================
     st.header("🌾 Campos certificados")
 
-    col4, col5, col6 = st.columns(3)
-    product_c = col4.selectbox("Producto (campo)", PRODUCTS)
-    year_c = col5.selectbox("Año (campo)", YEARS)
-    month_c = col6.selectbox("Mes (campo)", ["Todos"] + list(range(1, 13)))
+    c4, c5, c6 = st.columns(3)
+    product_c = c4.selectbox("Producto (campo)", PRODUCTS)
+    year_c = c5.selectbox("Año (campo)", YEARS)
+    month_c = c6.selectbox("Mes (campo)", ["Todos"] + list(range(1, 13)))
 
     dfc = load_data(year_c, "campo", product_c)
 
     if dfc is None or dfc.empty:
         st.warning("📌 Información de campos en proceso de mejora.")
     else:
+        col_crop = find_column(dfc, ["cultivo"])
         col_month_c = find_column(dfc, ["mes"])
+
+        if col_crop:
+            dfc = dfc[dfc[col_crop].str.lower() == product_c]
+
         if col_month_c:
             dfc["mes_norm"] = dfc[col_month_c].apply(normalize_month)
             if month_c != "Todos":
@@ -199,7 +180,7 @@ def dashboard():
         else:
             st.dataframe(dfc)
 
-    st.markdown("✅ **Data Core – MVP estable | Escalable | 13G Ready**")
+    st.markdown("✅ **Data Core – MVP estable | Escalable | Compatible con 13G**")
 
 # =============================
 # APP FLOW
