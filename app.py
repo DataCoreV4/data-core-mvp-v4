@@ -3,250 +3,204 @@ import pandas as pd
 import requests
 from io import BytesIO
 import os
-import re
+import hashlib
 
+# =========================
+# CONFIGURACIÓN GENERAL
+# =========================
 st.set_page_config(page_title="Data Core", layout="wide")
 
-# ======================================================
-# CONFIGURACIÓN GENERAL
-# ======================================================
 USERS_FILE = "users.csv"
+ADMIN_USER = "DCADMIN"
+ADMIN_PASS = "admindatacore123!"
 
-ADMIN_USER = "DATACORE_ADMIN"
-ADMIN_PASS = "DataCore@2025"
-
-PRODUCTOS = ["uva", "mango", "arandano", "limon", "palta"]
-MESES = ["Todos"] + list(range(1, 13))
-
-# ======================================================
-# TABLA MAESTRA (TAL CUAL TU DRIVE)
-# ======================================================
-RAW_TABLE = [
-    # AÑO, BASE, TIPO, PRODUCTO, URL
-    (2021,"envios","uva","1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF"),
-    (2021,"envios","mango","1k6CxjPufa0YF17e264BI8NYO1rFFZuc7"),
-    (2021,"envios","arandano","1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9"),
-    (2021,"envios","limon","1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8"),
-    (2021,"envios","palta","1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ"),
-
-    (2021,"campo","uva","1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A"),
-    (2021,"campo","mango","1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu"),
-    (2021,"campo","arandano","1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4"),
-    (2021,"campo","limon","12xOZVXqxvvepb97On1H8feKUoW_u1Qet"),
-    (2021,"campo","palta","1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO"),
-
-    (2022,"envios","uva","1wHxIXmn2stnjdFSnu8spnOSDw9Q45Dti"),
-    (2022,"envios","mango","1kjtC1QVGe4w3GWEYhMmB9VD98eYjhvPh"),
-    (2022,"envios","arandano","1tJRlp3FWvYZBr3LFPV1PFke3o6LZcOfa"),
-    (2022,"envios","limon","1HfO0jh0yPXK99P8mQ080KLEevc4QVnLT"),
-    (2022,"envios","palta","1IYS7yUDFmeCw3YyCIgKDbayZ63AORHvf"),
-
-    (2022,"campo","uva","1LS_80bCCgGE4flJ2BEzav1XeQQSrSX1y"),
-    (2022,"campo","mango","16CDM3zQnH3S5n2SNjqwJmk0oUGkbxtJS"),
-    (2022,"campo","arandano","1WTkBElLqv3aLQ8s2rkmlQqHM1zsKE33-"),
-    (2022,"campo","limon","123wwsJLNrvlTxh2VRZQy1JpVOjI9Oj32"),
-    (2022,"campo","palta","1uIs_MXnilSoPIGhtJtmOCv8N8un2VoFg"),
-
-    (2023,"envios","uva","1SZjCd3ANa4CF0N0lK_mnOQfzn0-ywTLs"),
-    (2023,"envios","mango","1S5mMR3nG_DeH3ZpOqAvcjidzPQMW8kw_"),
-    (2023,"envios","arandano","1JhAhZi3roOQpw5ejm3jnW5Av59De8wc2"),
-    (2023,"envios","limon","1sGnvph11F431fg5v9c8qzoH-Yxytffti"),
-    (2023,"envios","palta","1MCaBirErsv3PeJZ4soi2Fszw8QcJbg7w"),
-
-    (2023,"campo","uva","11sb54WtgNe0poLSR4q-nEGvjMdbnjXiq"),
-    (2023,"campo","mango","1qV3zoDQNnzeEvQR0eZ0FnrvxdkuruyUM"),
-    (2023,"campo","arandano","1jdNrMyVcW2HV5PJI63_A_oxl6xLpapl7"),
-    (2023,"campo","limon","1F708yJNg3mzrdHi53Dmw4RQZkTqUh4YH"),
-    (2023,"campo","palta","1ZBXYrxS4iJ-lUBPKAMtr4ZIWGf6Wh6ED"),
-
-    (2024,"envios","uva","1csIY-AT7Uw6QFp49SANyHALHuZO3r65n"),
-    (2024,"envios","mango","1In6_xnpKZwD1zTG4JrD3uhk7sYNKU4qF"),
-    (2024,"envios","arandano","1CZSWhLV-STPw9k90cOVzQxJ0V2k7ZTUa"),
-    (2024,"envios","limon","1XxGB8PGI4yh5K5mO5qGqRnSK_Fe2nPAX"),
-    (2024,"envios","palta","1mLNGjAunM6HTiCnJIgEoaqZQEuegfSf9"),
-
-    (2024,"campo","uva","15CoNL-b9tONKTjbj2rIy8cthyeVhsD_F"),
-    (2024,"campo","mango","1T6OVYHVN6j57Km9Z8zWrKYMlzTUIeRes"),
-    (2024,"campo","arandano","1YejBbqWi383QjeJntU-AaICQw0TOJyaV"),
-    (2024,"campo","limon","1JH6oXdDP5z-JAQgu9WvT-ej1pCjnX6WS"),
-    (2024,"campo","palta","1fxh3QgnZXzjkuqmwG4w9h1YjhK6PPvX9"),
-
-    (2025,"envios","uva","1iw-OafOHph_epXgf-6kreXhq2GxzNqyN"),
-    (2025,"envios","mango","1-f5tlde1nBJnl_9BbRJkaDpGBleYtbyG"),
-    (2025,"envios","arandano","1TxC9TwgFojnNRkQlOI27KJBzG0TK7tp7"),
-    (2025,"envios","limon","1G8VbTnSeOcJJVDRkze9s12TRts5BvQx6"),
-    (2025,"envios","palta","1Qt680UXFnKBh7bdV0iGqnJKKmc1suNVA"),
-
-    (2025,"campo","uva","15R-9ECTNpSQM1FC8tFPUs0emE16H8cHT"),
-    (2025,"campo","mango","11IziWG98PfqkSyTaK5GvKwU4NEC9LwXJ"),
-    (2025,"campo","arandano","15w2FG2TT_qPfxEksBgcGbfPu67yNbvYT"),
-    (2025,"campo","limon","178kHRjqLgs-EFUmzCsNclBKq-nYmVJPO"),
-    (2025,"campo","palta","1fo9HKY9DSKAjgLVKsx2H0Y7f_YU4DwRT"),
-]
-
-DRIVE_MAP = {(y,t,p):fid for y,t,p,fid in RAW_TABLE}
-YEARS = sorted({y for y,_,_,_ in RAW_TABLE})
-
-# ======================================================
+# =========================
 # UTILIDADES
-# ======================================================
-def load_drive_csv(file_id):
-    try:
-        url = f"https://drive.google.com/uc?id={file_id}"
-        r = requests.get(url)
-        r.raise_for_status()
-        return pd.read_csv(BytesIO(r.content), engine="python")
-    except:
-        return None
+# =========================
+def hash_pwd(pwd):
+    return hashlib.sha256(pwd.encode()).hexdigest()
 
-# ======================================================
-# USUARIOS
-# ======================================================
-def load_users():
-    cols = ["usuario","password","rol","nombre","apellido","dni","correo","celular","empresa","cargo"]
+def init_users():
     if not os.path.exists(USERS_FILE):
-        pd.DataFrame(columns=cols).to_csv(USERS_FILE, index=False)
-    df = pd.read_csv(USERS_FILE)
-    return df[cols]
+        df = pd.DataFrame(columns=[
+            "usuario", "password", "nombre", "apellido", "dni",
+            "correo", "celular", "empresa", "cargo", "rol"
+        ])
+        df.loc[0] = [
+            ADMIN_USER, hash_pwd(ADMIN_PASS),
+            "Administrador", "DataCore", "-", "-", "-", "-", "-", "admin"
+        ]
+        df.to_csv(USERS_FILE, index=False)
+
+def load_users():
+    return pd.read_csv(USERS_FILE)
 
 def save_users(df):
     df.to_csv(USERS_FILE, index=False)
 
-def ensure_admin():
-    df = load_users()
-    df = df[df.usuario != ADMIN_USER]
-    admin = pd.DataFrame([{
-        "usuario": ADMIN_USER,
-        "password": ADMIN_PASS,
-        "rol": "admin",
-        "nombre": "Administrador",
-        "apellido": "",
-        "dni": "",
-        "correo": "",
-        "celular": "",
-        "empresa": "Data Core",
-        "cargo": "Admin"
-    }])
-    df = pd.concat([df, admin], ignore_index=True)
-    save_users(df)
+def drive_download(url):
+    file_id = url.split("/d/")[1].split("/")[0]
+    download_url = f"https://drive.google.com/uc?id={file_id}"
+    r = requests.get(download_url)
+    r.raise_for_status()
+    return BytesIO(r.content)
 
-# ======================================================
+def read_csv_drive(url):
+    try:
+        return pd.read_csv(drive_download(url), sep=",", encoding="utf-8", on_bad_lines="skip", low_memory=False)
+    except:
+        return pd.read_csv(drive_download(url), sep=",", encoding="latin1", on_bad_lines="skip", low_memory=False)
+
+def normalize_columns(df):
+    df.columns = (
+        df.columns.str.lower()
+        .str.strip()
+        .str.replace("á","a").str.replace("é","e")
+        .str.replace("í","i").str.replace("ó","o")
+        .str.replace("ú","u").str.replace("ñ","n")
+    )
+    return df
+
+def normalize_mes(val):
+    if pd.isna(val):
+        return None
+    if isinstance(val, (int, float)):
+        return int(val)
+    val = str(val).strip().lower()
+    meses = {
+        "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
+        "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
+    }
+    if val.isdigit():
+        return int(val)
+    return meses.get(val[:3], None)
+
+# =========================
+# MAPA DRIVE
+# =========================
+DRIVE_MAP = {
+    ("envios","uva",2021): "https://drive.google.com/file/d/1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF/view",
+    ("envios","mango",2021): "https://drive.google.com/file/d/1k6CxjPufa0YF17e264BI8NYO1rFFZuc7/view",
+    ("envios","arandano",2021): "https://drive.google.com/file/d/1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9/view",
+    ("envios","limon",2021): "https://drive.google.com/file/d/1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8/view",
+    ("envios","palta",2021): "https://drive.google.com/file/d/1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ/view",
+    # ⚠️ EL RESTO DE LINKS YA LOS TIENES → AGREGA AQUÍ SIN CAMBIAR EL CÓDIGO
+}
+
+# =========================
 # AUTH
-# ======================================================
+# =========================
 def auth_screen():
     st.title("🔐 Data Core – Acceso")
+
     tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
 
-    # ---------- LOGIN ----------
     with tab1:
         u = st.text_input("Usuario", key="login_user")
         p = st.text_input("Contraseña", type="password", key="login_pass")
-
-        if st.button("Ingresar", key="login_btn"):
-            df = load_users()
-            row = df[(df.usuario == u) & (df.password == p)]
-            if not row.empty:
-                st.session_state.user = row.iloc[0].to_dict()
+        if st.button("Ingresar"):
+            users = load_users()
+            if ((users["usuario"] == u) & (users["password"] == hash_pwd(p))).any():
+                st.session_state.user = u
+                st.session_state.rol = users.loc[users["usuario"]==u,"rol"].values[0]
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
 
-    # ---------- REGISTRO ----------
     with tab2:
-        reg_usuario = st.text_input("Usuario", key="reg_usuario")
-        reg_pass = st.text_input("Contraseña", type="password", key="reg_pass")
-        reg_pass2 = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
-        reg_nombre = st.text_input("Nombre", key="reg_nombre")
-        reg_apellido = st.text_input("Apellido", key="reg_apellido")
-        reg_dni = st.text_input("DNI", key="reg_dni")
-        reg_correo = st.text_input("Correo electrónico", key="reg_correo")
-        reg_celular = st.text_input("Celular", key="reg_celular")
-        reg_empresa = st.text_input("Empresa (opcional)", key="reg_empresa")
-        reg_cargo = st.text_input("Cargo (opcional)", key="reg_cargo")
+        data = {}
+        for f in ["usuario","password","nombre","apellido","dni","correo","celular","empresa","cargo"]:
+            data[f] = st.text_input(f.capitalize(), key=f"reg_{f}", type="password" if f=="password" else "default")
+        if st.button("Registrarse"):
+            users = load_users()
+            if data["usuario"] in users["usuario"].values:
+                st.error("Usuario ya existe")
+            else:
+                users.loc[len(users)] = [
+                    data["usuario"], hash_pwd(data["password"]),
+                    data["nombre"], data["apellido"], data["dni"],
+                    data["correo"], data["celular"], data["empresa"],
+                    data["cargo"], "freemium"
+                ]
+                save_users(users)
+                st.success("Registro exitoso")
 
-        if st.button("Registrar", key="reg_btn"):
-            if reg_pass != reg_pass2:
-                st.error("Las contraseñas no coinciden")
-                return
-
-            df = load_users()
-            if reg_usuario in df.usuario.values:
-                st.error("El usuario ya existe")
-                return
-
-            new = {
-                "usuario": reg_usuario,
-                "password": reg_pass,
-                "rol": "freemium",
-                "nombre": reg_nombre,
-                "apellido": reg_apellido,
-                "dni": reg_dni,
-                "correo": reg_correo,
-                "celular": reg_celular,
-                "empresa": reg_empresa,
-                "cargo": reg_cargo
-            }
-
-            df = pd.concat([df, pd.DataFrame([new])], ignore_index=True)
-            save_users(df)
-            st.success("Registro exitoso. Ahora puede ingresar.")
-
-# ======================================================
+# =========================
 # DASHBOARD
-# ======================================================
+# =========================
 def dashboard():
-    u = st.session_state.user
-    st.markdown(f"## 👋 Bienvenido, {u['nombre'] or u['usuario']}")
+    st.markdown(f"👋 **Bienvenido, {st.session_state.user}**")
 
-    c1,c2,c3 = st.columns(3)
-    prod = c1.selectbox("Producto", PRODUCTOS)
-    year = c2.selectbox("Año", YEARS)
-    mes = c3.selectbox("Mes", MESES)
+    colf1, colf2, colf3 = st.columns(3)
+    producto = colf1.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
+    anio = colf2.selectbox("Año", [2021,2022,2023,2024,2025])
+    mes = colf3.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
-    colA,colB = st.columns(2)
+    # ================= ENVIOS =================
+    st.subheader("📦 Envíos")
+    key = ("envios", producto, anio)
+    if key in DRIVE_MAP:
+        df = normalize_columns(read_csv_drive(DRIVE_MAP[key]))
+        mes_col = next((c for c in df.columns if "mes" in c), None)
+        if mes_col:
+            df["mes_norm"] = df[mes_col].apply(normalize_mes)
+            if mes != "Todos":
+                df = df[df["mes_norm"] == mes]
 
-    with colA:
-        st.subheader("📦 Envíos")
-        key = (year,"envios",prod)
-        df = load_drive_csv(DRIVE_MAP[key]) if key in DRIVE_MAP else None
-        if df is None:
-            st.info("📌 Información en proceso de mejora")
-        else:
-            if u["rol"] == "freemium":
-                st.dataframe(df.head(3))
-                st.markdown("🔓 **Adquirir data completa:** datacore.agrotech@gmail.com")
-            else:
-                st.dataframe(df)
+        if st.session_state.rol != "admin":
+            df = df.head(3)
 
-    with colB:
-        st.subheader("🌾 Campos certificados")
-        key = (year,"campo",prod)
-        df = load_drive_csv(DRIVE_MAP[key]) if key in DRIVE_MAP else None
-        if df is None:
-            st.info("📌 Información en proceso de mejora")
-        else:
-            if u["rol"] == "freemium":
-                st.dataframe(df.head(3))
-                st.markdown("🔓 **Adquirir data completa:** datacore.agrotech@gmail.com")
-            else:
-                st.dataframe(df)
+        st.dataframe(df)
+        if st.session_state.rol != "admin":
+            st.markdown("🔓 **Adquirir acceso premium a Envíos**")
+            st.markdown("[Solicitar acceso](mailto:datacore.agrotech@gmail.com)")
+    else:
+        st.info("📌 Información en proceso de mejora")
 
-    if u["rol"] == "admin":
+    st.divider()
+
+    # ================= CAMPOS =================
+    st.subheader("🌾 Campos certificados")
+    key = ("campo", producto, anio)
+    if key in DRIVE_MAP:
+        dfc = normalize_columns(read_csv_drive(DRIVE_MAP[key]))
+        mes_col = next((c for c in dfc.columns if "mes" in c), None)
+        if mes_col:
+            dfc["mes_norm"] = dfc[mes_col].apply(normalize_mes)
+            if mes != "Todos":
+                dfc = dfc[dfc["mes_norm"] == mes]
+
+        if st.session_state.rol != "admin":
+            dfc = dfc.head(3)
+
+        st.dataframe(dfc)
+        if st.session_state.rol != "admin":
+            st.markdown("🔓 **Adquirir acceso premium a Campos**")
+            st.markdown("[Solicitar acceso](mailto:datacore.agrotech@gmail.com)")
+    else:
+        st.info("📌 Información de campos en proceso de mejora")
+
+    # ================= ADMIN =================
+    if st.session_state.rol == "admin":
         st.divider()
         st.subheader("🛠 Gestión de usuarios")
         users = load_users()
-        st.dataframe(users[["usuario","rol","correo"]])
-        sel = st.selectbox("Usuario", users.usuario)
-        new_role = st.selectbox("Nuevo rol", ["freemium","premium"])
-        if st.button("Actualizar rol"):
-            users.loc[users.usuario == sel, "rol"] = new_role
-            save_users(users)
-            st.success("Rol actualizado")
+        for i,r in users.iterrows():
+            if r.usuario != ADMIN_USER:
+                col1,col2 = st.columns([3,2])
+                col1.write(r.usuario)
+                new_role = col2.selectbox(
+                    "Rol", ["freemium","premium"],
+                    index=0 if r.rol=="freemium" else 1,
+                    key=f"rol_{i}"
+                )
+                users.loc[i,"rol"] = new_role
+        save_users(users)
 
-# ======================================================
+# =========================
 # MAIN
-# ======================================================
-ensure_admin()
+# =========================
+init_users()
 
 if "user" not in st.session_state:
     auth_screen()
