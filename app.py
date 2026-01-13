@@ -1,123 +1,101 @@
 import streamlit as st
 import pandas as pd
-import hashlib
 import os
 
-# ======================================================
-# CONFIGURACIÓN
-# ======================================================
+# ---------------- CONFIGURACIÓN GENERAL ----------------
 st.set_page_config(page_title="Data Core – MVP", layout="wide")
 
-USERS_FILE = "users.csv"
+USERS_FILE = "usuarios.csv"
 
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
+ADMIN_NOMBRE = "Administrador"
 
-USER_COLUMNS = [
-    "usuario", "password", "nombre", "apellido", "dni",
-    "correo", "celular", "empresa", "cargo", "tipo"
-]
+PRODUCTOS = ["uva", "mango", "arandano", "limon", "palta"]
+ANIOS = [2021, 2022, 2023, 2024, 2025]
+MESES = ["Todos"] + list(range(1, 13))
 
-# ======================================================
-# UTILIDADES
-# ======================================================
-def hash_pass(p):
-    return hashlib.sha256(p.encode()).hexdigest()
 
+# ---------------- UTILIDADES ----------------
 def load_users():
     if not os.path.exists(USERS_FILE):
-        df = pd.DataFrame(columns=USER_COLUMNS)
+        df = pd.DataFrame(columns=[
+            "usuario", "password", "nombre", "apellido",
+            "dni", "correo", "celular",
+            "empresa", "cargo", "tipo"
+        ])
         df.to_csv(USERS_FILE, index=False)
-        return df
+    return pd.read_csv(USERS_FILE)
 
-    df = pd.read_csv(USERS_FILE)
-
-    # normalizar estructura antigua
-    for col in USER_COLUMNS:
-        if col not in df.columns:
-            df[col] = ""
-
-    df = df[USER_COLUMNS]
-    df.to_csv(USERS_FILE, index=False)
-    return df
 
 def save_users(df):
-    df = df[USER_COLUMNS]
     df.to_csv(USERS_FILE, index=False)
+
 
 def ensure_admin():
     df = load_users()
+    if "usuario" not in df.columns:
+        return
 
-    admin_row = {
-        "usuario": ADMIN_USER,
-        "password": hash_pass(ADMIN_PASS),
-        "nombre": "Administrador",
-        "apellido": "Data Core",
-        "dni": "",
-        "correo": "admin@datacore.pe",
-        "celular": "",
-        "empresa": "Data Core",
-        "cargo": "Administrador",
-        "tipo": "admin"
-    }
+    if not (df["usuario"] == ADMIN_USER).any():
+        admin_row = pd.DataFrame([{
+            "usuario": ADMIN_USER,
+            "password": ADMIN_PASS,
+            "nombre": ADMIN_NOMBRE,
+            "apellido": "",
+            "dni": "",
+            "correo": "",
+            "celular": "",
+            "empresa": "",
+            "cargo": "",
+            "tipo": "admin"
+        }])
+        df = pd.concat([df, admin_row], ignore_index=True)
+        save_users(df)
 
-    if (df["usuario"] == ADMIN_USER).any():
-        # ✅ asignación correcta columna por columna
-        for col, val in admin_row.items():
-            df.loc[df["usuario"] == ADMIN_USER, col] = val
-    else:
-        df = pd.concat([df, pd.DataFrame([admin_row])], ignore_index=True)
 
-    save_users(df)
-
-# ======================================================
-# AUTENTICACIÓN
-# ======================================================
+# ---------------- AUTENTICACIÓN ----------------
 def auth_screen():
     st.title("🔐 Data Core – Acceso")
 
     tab_login, tab_register = st.tabs(["Ingresar", "Registrarse"])
 
-    # ---------- LOGIN ----------
     with tab_login:
-        user = st.text_input("Usuario", key="login_user")
-        pwd = st.text_input("Contraseña", type="password", key="login_pass")
+        username = st.text_input("Usuario", key="login_user")
+        password = st.text_input("Contraseña", type="password", key="login_pass")
 
-        if st.button("Ingresar", key="login_btn"):
+        if st.button("Ingresar"):
             users = load_users()
-            hp = hash_pass(pwd)
-
             match = users[
-                (users["usuario"] == user) &
-                (users["password"] == hp)
+                (users["usuario"] == username) &
+                (users["password"] == password)
             ]
 
             if not match.empty:
-                st.session_state.user = user
+                st.session_state.auth = True
+                st.session_state.user = username
                 st.session_state.tipo = match.iloc[0]["tipo"]
                 st.session_state.nombre = match.iloc[0]["nombre"]
-                st.success("Ingreso exitoso")
                 st.rerun()
             else:
                 st.error("Usuario o contraseña incorrectos")
 
-    # ---------- REGISTRO ----------
     with tab_register:
         st.subheader("Registro")
 
         r_user = st.text_input("Usuario", key="reg_user")
-        r_pwd1 = st.text_input("Contraseña", type="password", key="reg_pass1")
-        r_pwd2 = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
-        nombre = st.text_input("Nombre", key="reg_nombre")
-        apellido = st.text_input("Apellido", key="reg_apellido")
-        dni = st.text_input("DNI", key="reg_dni")
-        correo = st.text_input("Correo electrónico", key="reg_correo")
-        celular = st.text_input("Celular", key="reg_celular")
-        empresa = st.text_input("Empresa (opcional)", key="reg_empresa")
-        cargo = st.text_input("Cargo (opcional)", key="reg_cargo")
+        r_pass = st.text_input("Contraseña", type="password", key="reg_pass")
+        r_pass2 = st.text_input("Repetir contraseña", type="password", key="reg_pass2")
+        r_nombre = st.text_input("Nombre")
+        r_apellido = st.text_input("Apellido")
+        r_dni = st.text_input("DNI")
+        r_correo = st.text_input("Correo electrónico")
+        r_cel = st.text_input("Celular")
+        r_empresa = st.text_input("Empresa (opcional)")
+        r_cargo = st.text_input("Cargo (opcional)")
 
-        if st.button("Registrarse", key="reg_btn"):
-            if r_pwd1 != r_pwd2:
+        if st.button("Registrar"):
+            if r_pass != r_pass2:
                 st.error("Las contraseñas no coinciden")
                 return
 
@@ -127,41 +105,74 @@ def auth_screen():
                 st.error("El usuario ya existe")
                 return
 
-            nuevo = pd.DataFrame([{
+            new_row = pd.DataFrame([{
                 "usuario": r_user,
-                "password": hash_pass(r_pwd1),
-                "nombre": nombre,
-                "apellido": apellido,
-                "dni": dni,
-                "correo": correo,
-                "celular": celular,
-                "empresa": empresa,
-                "cargo": cargo,
+                "password": r_pass,
+                "nombre": r_nombre,
+                "apellido": r_apellido,
+                "dni": r_dni,
+                "correo": r_correo,
+                "celular": r_cel,
+                "empresa": r_empresa,
+                "cargo": r_cargo,
                 "tipo": "freemium"
             }])
 
-            users = pd.concat([users, nuevo], ignore_index=True)
+            users = pd.concat([users, new_row], ignore_index=True)
             save_users(users)
+            st.success("Registro exitoso. Ahora puedes ingresar.")
 
-            st.success("Registro exitoso. Ya puedes ingresar.")
 
-# ======================================================
-# DASHBOARD BASE (no toca data)
-# ======================================================
+# ---------------- DASHBOARD ----------------
 def dashboard():
     st.markdown(f"### 👋 Bienvenido, **{st.session_state.nombre}**")
-    st.info("Dashboard base estable. Data se reconecta después.")
 
-    if st.button("Cerrar sesión"):
-        st.session_state.clear()
-        st.rerun()
+    # -------- FILTROS GENERALES --------
+    col1, col2, col3 = st.columns(3)
 
-# ======================================================
-# MAIN
-# ======================================================
+    with col1:
+        producto = st.selectbox("Producto", PRODUCTOS)
+    with col2:
+        anio = st.selectbox("Año", ANIOS)
+    with col3:
+        mes = st.selectbox("Mes", MESES)
+
+    st.divider()
+
+    # -------- SECCIÓN ENVÍOS --------
+    st.subheader("📦 Envíos")
+
+    st.info("📌 Información en proceso de mejora para este producto/año.")
+
+    # -------- SECCIÓN CAMPOS --------
+    st.subheader("🌾 Campos certificados")
+
+    st.info("📌 Información de campos en proceso de mejora.")
+
+    # -------- FREEMIUM --------
+    if st.session_state.tipo != "admin":
+        st.warning(
+            "🔒 Acceso limitado. "
+            "Para ver la data completa, escríbenos a "
+            "**datacore.agrotech@gmail.com**"
+        )
+
+    # -------- ADMIN --------
+    if st.session_state.tipo == "admin":
+        st.divider()
+        st.subheader("🛠 Gestión de usuarios")
+
+        users = load_users()
+        st.dataframe(users, use_container_width=True)
+
+
+# ---------------- MAIN ----------------
 ensure_admin()
 
-if "user" not in st.session_state:
+if "auth" not in st.session_state:
+    st.session_state.auth = False
+
+if not st.session_state.auth:
     auth_screen()
 else:
     dashboard()
