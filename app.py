@@ -18,7 +18,7 @@ CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 # =====================================================
 # DRIVE MAP (NO SE TOCA)
 # =====================================================
-DRIVE_MAP = {  # ← exactamente igual, no se modifica
+DRIVE_MAP = {
     "envios": {
         2021: {
             "uva": "https://drive.google.com/file/d/1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF/view",
@@ -96,37 +96,30 @@ DRIVE_MAP = {  # ← exactamente igual, no se modifica
 }
 
 # =====================================================
-# UTILIDADES
+# UTILIDADES MES
 # =====================================================
-MESES_MAP = {
-    "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
-    "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
-}
+MESES = ["Todos","Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
+MESES_MAP = {m.lower():i for i,m in enumerate(MESES) if i>0}
 
-def normalize(text):
-    return unicodedata.normalize("NFKD", text).encode("ascii","ignore").decode().lower()
+def normalize(txt):
+    return unicodedata.normalize("NFKD", txt).encode("ascii","ignore").decode().lower()
 
-def detect_mes_column(df):
+def find_mes_column(df):
     for c in df.columns:
-        c_norm = normalize(c)
-        if "mes" in c_norm:
+        if "mes" in normalize(c):
             return c
     return None
 
-def normalize_mes(val):
-    if pd.isna(val):
-        return None
-    if isinstance(val, (int,float)):
-        return int(val)
-    v = str(val).lower()[:3]
-    return MESES_MAP.get(v)
+def parse_mes(val):
+    if pd.isna(val): return None
+    if isinstance(val,(int,float)): return int(val)
+    return MESES_MAP.get(str(val).lower()[:3])
 
 # =====================================================
 # DRIVE
 # =====================================================
 def drive_download(url):
-    file_id = url.split("/d/")[1].split("/")[0]
-    return f"https://drive.google.com/uc?id={file_id}"
+    return f"https://drive.google.com/uc?id={url.split('/d/')[1].split('/')[0]}"
 
 def load_csv(url):
     r = requests.get(drive_download(url))
@@ -138,86 +131,94 @@ def load_csv(url):
 # =====================================================
 def init_users():
     if not os.path.exists(USERS_FILE):
-        pd.DataFrame(columns=["usuario","password","rol"]).to_csv(USERS_FILE, index=False)
-    df = pd.read_csv(USERS_FILE)
-    df = df[df.usuario != ADMIN_USER]
-    df = pd.concat([df, pd.DataFrame([{
-        "usuario": ADMIN_USER,
-        "password": ADMIN_PASS,
-        "rol": "admin"
-    }])], ignore_index=True)
-    df.to_csv(USERS_FILE, index=False)
+        pd.DataFrame(columns=["usuario","password","rol"]).to_csv(USERS_FILE,index=False)
+    df=pd.read_csv(USERS_FILE)
+    df=df[df.usuario!=ADMIN_USER]
+    df=pd.concat([df,pd.DataFrame([{"usuario":ADMIN_USER,"password":ADMIN_PASS,"rol":"admin"}])])
+    df.to_csv(USERS_FILE,index=False)
 
 # =====================================================
 # SESIÓN
 # =====================================================
 if "logged" not in st.session_state:
-    st.session_state.logged = False
-    st.session_state.role = ""
-    st.session_state.user = ""
+    st.session_state.update({"logged":False,"role":"","user":""})
 
 # =====================================================
-# AUTH
+# AUTH + REGISTRO
 # =====================================================
 def auth():
     st.title("🔐 Data Core – Acceso")
-    u = st.text_input("Usuario")
-    p = st.text_input("Contraseña", type="password")
-    if st.button("Ingresar"):
-        df = pd.read_csv(USERS_FILE)
-        ok = df[(df.usuario==u)&(df.password==p)]
-        if not ok.empty:
-            st.session_state.logged=True
-            st.session_state.role=ok.iloc[0].rol
-            st.session_state.user=u
-            st.rerun()
-        else:
-            st.error("Usuario o contraseña incorrectos")
+    t1,t2=st.tabs(["Ingresar","Registrarse"])
+
+    with t1:
+        u=st.text_input("Usuario",key="lu")
+        p=st.text_input("Contraseña",type="password",key="lp")
+        if st.button("Ingresar"):
+            df=pd.read_csv(USERS_FILE)
+            ok=df[(df.usuario==u)&(df.password==p)]
+            if not ok.empty:
+                st.session_state.update({"logged":True,"role":ok.iloc[0].rol,"user":u})
+                st.rerun()
+            else: st.error("Usuario o contraseña incorrectos")
+
+    with t2:
+        with st.form("reg"):
+            d={}
+            d["usuario"]=st.text_input("Usuario")
+            d["password"]=st.text_input("Contraseña",type="password")
+            for f in ["nombre","apellido","dni","correo","celular","empresa","cargo"]:
+                d[f]=st.text_input(f.capitalize())
+            if st.form_submit_button("Registrarse"):
+                df=pd.read_csv(USERS_FILE)
+                if d["usuario"] in df.usuario.values: st.error("Usuario ya existe")
+                else:
+                    d["rol"]="freemium"
+                    df.loc[len(df)]=d
+                    df.to_csv(USERS_FILE,index=False)
+                    st.success("Registro exitoso")
 
 # =====================================================
 # DASHBOARD
 # =====================================================
 def dashboard():
     st.markdown(f"👋 **Bienvenido, {st.session_state.user}**")
+    if st.button("Cerrar sesión"):
+        st.session_state.logged=False
+        st.rerun()
 
-    producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
-    anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
+    producto=st.selectbox("Producto",["uva","mango","arandano","limon","palta"])
+    anio=st.selectbox("Año",sorted(DRIVE_MAP["envios"].keys()))
+    mes=st.selectbox("Mes",MESES)
 
-    mes_sel = st.selectbox(
-        "Mes",
-        ["Todos"] + ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"]
-    )
+    for tipo,titulo in [("envios","📦 Envíos"),("campo","🌾 Campos certificados")]:
+        st.subheader(titulo)
+        try:
+            df=load_csv(DRIVE_MAP[tipo][anio][producto])
+            mc=find_mes_column(df)
+            if mc and mes!="Todos":
+                df["_mes"]=df[mc].apply(parse_mes)
+                df=df[df["_mes"]==MESES_MAP[mes.lower()]]
+            st.dataframe(df if st.session_state.role=="admin" else df.head(3))
+            if st.session_state.role!="admin":
+                st.markdown("🔓 **Acceso completo disponible**")
+                st.link_button("📩 Solicitar acceso completo",
+                    f"mailto:{CONTACT_EMAIL}?subject=Acceso {tipo.upper()} {producto} {anio}")
+        except:
+            st.info("📌 Información en proceso de mejora")
 
-    # ---------------- ENVÍOS ----------------
-    st.subheader("📦 Envíos")
-    try:
-        df = load_csv(DRIVE_MAP["envios"][anio][producto])
-        col_mes = detect_mes_column(df)
-        if col_mes and mes_sel!="Todos":
-            df["_mes"] = df[col_mes].apply(normalize_mes)
-            df = df[df["_mes"]==MESES_MAP[mes_sel.lower()[:3]]]
-        st.dataframe(df if st.session_state.role=="admin" else df.head(3))
-    except:
-        st.info("📌 Información en proceso de mejora")
-
-    # ---------------- CAMPOS ----------------
-    st.subheader("🌾 Campos certificados")
-    try:
-        dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
-        col_mes = detect_mes_column(dfc)
-        if col_mes and mes_sel!="Todos":
-            dfc["_mes"] = dfc[col_mes].apply(normalize_mes)
-            dfc = dfc[dfc["_mes"]==MESES_MAP[mes_sel.lower()[:3]]]
-        st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
-    except:
-        st.info("📌 Información de campos en proceso de mejora")
+    if st.session_state.role=="admin":
+        st.subheader("🛠 Gestión de usuarios")
+        users=pd.read_csv(USERS_FILE)
+        for i,r in users.iterrows():
+            if r.usuario!=ADMIN_USER:
+                users.loc[i,"rol"]=st.selectbox(
+                    r.usuario,["freemium","premium"],
+                    index=0 if r.rol=="freemium" else 1,
+                    key=f"rol_{i}")
+        users.to_csv(USERS_FILE,index=False)
 
 # =====================================================
 # MAIN
 # =====================================================
 init_users()
-
-if not st.session_state.logged:
-    auth()
-else:
-    dashboard()
+auth() if not st.session_state.logged else dashboard()
