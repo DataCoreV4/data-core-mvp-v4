@@ -32,7 +32,7 @@ def load_users():
 
     df = pd.read_csv(USERS_FILE)
 
-    # 🔧 normaliza estructura vieja
+    # normalizar estructura antigua
     for col in USER_COLUMNS:
         if col not in df.columns:
             df[col] = ""
@@ -62,7 +62,9 @@ def ensure_admin():
     }
 
     if (df["usuario"] == ADMIN_USER).any():
-        df.loc[df["usuario"] == ADMIN_USER, :] = admin_row
+        # ✅ asignación correcta columna por columna
+        for col, val in admin_row.items():
+            df.loc[df["usuario"] == ADMIN_USER, col] = val
     else:
         df = pd.concat([df, pd.DataFrame([admin_row])], ignore_index=True)
 
@@ -76,7 +78,7 @@ def auth_screen():
 
     tab_login, tab_register = st.tabs(["Ingresar", "Registrarse"])
 
-    # ---------------- LOGIN ----------------
+    # ---------- LOGIN ----------
     with tab_login:
         user = st.text_input("Usuario", key="login_user")
         pwd = st.text_input("Contraseña", type="password", key="login_pass")
@@ -99,7 +101,7 @@ def auth_screen():
             else:
                 st.error("Usuario o contraseña incorrectos")
 
-    # ---------------- REGISTRO ----------------
+    # ---------- REGISTRO ----------
     with tab_register:
         st.subheader("Registro")
 
@@ -144,11 +146,11 @@ def auth_screen():
             st.success("Registro exitoso. Ya puedes ingresar.")
 
 # ======================================================
-# DASHBOARD (placeholder estable)
+# DASHBOARD BASE (no toca data)
 # ======================================================
 def dashboard():
     st.markdown(f"### 👋 Bienvenido, **{st.session_state.nombre}**")
-    st.info("Dashboard activo. Data y filtros continúan intactos.")
+    st.info("Dashboard base estable. Data se reconecta después.")
 
     if st.button("Cerrar sesión"):
         st.session_state.clear()
