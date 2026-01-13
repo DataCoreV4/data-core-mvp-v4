@@ -21,14 +21,14 @@ USERS = {
 DATA_MAP = {
     (2021, "envios", "uva"): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
     (2021, "campo", "uva"): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    # 👉 puedes seguir agregando todos
+    # 👉 agrega los demás cuando quieras
 }
 
 PRODUCTS = ["uva", "mango", "arandano", "limon", "palta"]
 YEARS = [2021, 2022, 2023, 2024, 2025]
 
 # ======================================
-# GOOGLE DRIVE DOWNLOADER (CLAVE)
+# GOOGLE DRIVE DOWNLOADER
 # ======================================
 def download_from_gdrive(file_id):
     URL = "https://docs.google.com/uc?export=download"
@@ -62,7 +62,13 @@ def load_data(year, tipo, producto):
 
     try:
         file_bytes = download_from_gdrive(file_id)
-        df = pd.read_csv(file_bytes, sep=",", encoding="utf-8")
+        df = pd.read_csv(
+            file_bytes,
+            sep=None,
+            engine="python",
+            encoding="utf-8",
+            on_bad_lines="skip"
+        )
         return df
     except Exception as e:
         st.error(f"Error cargando data: {e}")
