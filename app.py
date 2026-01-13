@@ -12,6 +12,7 @@ st.set_page_config("Data Core", layout="wide")
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 USERS_FILE = "users.csv"
+CONTACT_EMAIL = "datacore.agrotech@gmail.com"
 
 # =====================================================
 # DRIVE MAP (NO SE TOCA)
@@ -201,20 +202,37 @@ def dashboard():
     producto = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
     anio = st.selectbox("Año", sorted(DRIVE_MAP["envios"].keys()))
 
+    # ---------------- ENVÍOS ----------------
     st.subheader("📦 Envíos")
     try:
         df = load_csv(DRIVE_MAP["envios"][anio][producto])
         st.dataframe(df if st.session_state.role=="admin" else df.head(3))
+
+        if st.session_state.role != "admin":
+            st.markdown("🔓 **Acceso completo disponible**")
+            st.link_button(
+                "📩 Solicitar acceso completo – Envíos",
+                f"mailto:{CONTACT_EMAIL}?subject=Solicitud%20Acceso%20ENVÍOS%20{producto}%20{anio}"
+            )
     except:
         st.info("📌 Información en proceso de mejora")
 
+    # ---------------- CAMPOS ----------------
     st.subheader("🌾 Campos certificados")
     try:
         dfc = load_csv(DRIVE_MAP["campo"][anio][producto])
         st.dataframe(dfc if st.session_state.role=="admin" else dfc.head(3))
+
+        if st.session_state.role != "admin":
+            st.markdown("🔓 **Acceso completo disponible**")
+            st.link_button(
+                "📩 Solicitar acceso completo – Campos",
+                f"mailto:{CONTACT_EMAIL}?subject=Solicitud%20Acceso%20CAMPOS%20{producto}%20{anio}"
+            )
     except:
         st.info("📌 Información de campos en proceso de mejora")
 
+    # ---------------- ADMIN ----------------
     if st.session_state.role == "admin":
         st.subheader("🛠 Gestión de usuarios")
         users = pd.read_csv(USERS_FILE)
