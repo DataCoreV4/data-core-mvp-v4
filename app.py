@@ -3,216 +3,122 @@ import pandas as pd
 import requests
 from io import BytesIO
 import os
+import re
 
 st.set_page_config(page_title="Data Core", layout="wide")
 
 # =========================
-# CONFIGURACIÓN GENERAL
+# CONFIG USUARIOS
 # =========================
-ADMIN_USER = "DCADMIN"
-ADMIN_PASS = "admindatacore123!"
 USERS_FILE = "users.csv"
 
-# =========================
-# MAPA DRIVE (CONFIRMADO)
-# =========================
-DRIVE_MAP = {
-    (2021, "envios", "uva"): "1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF",
-    (2021, "envios", "mango"): "1k6CxjPufa0YF17e264BI8NYO1rFFZuc7",
-    (2021, "envios", "arandano"): "1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9",
-    (2021, "envios", "limon"): "1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8",
-    (2021, "envios", "palta"): "1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ",
-
-    (2021, "campo", "uva"): "1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A",
-    (2021, "campo", "mango"): "1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu",
-    (2021, "campo", "arandano"): "1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4",
-    (2021, "campo", "limon"): "12xOZVXqxvvepb97On1H8feKUoW_u1Qet",
-    (2021, "campo", "palta"): "1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO",
-}
+ADMIN_USER = "DATACORE_ADMIN"
+ADMIN_PASS = "DataCore@2025"
 
 # =========================
-# UTILIDADES
+# TABLA MAESTRA DRIVE
 # =========================
-def drive_download(file_id):
-    url = f"https://drive.google.com/uc?id={file_id}"
-    r = requests.get(url)
-    r.raise_for_status()
-    return r.content
+RAW_TABLE = [
+    # AÑO, BASE, TIPO, PRODUCTO, URL
+    (2021,"BASE","envios","uva","https://drive.google.com/file/d/1I-g0aN3KIgKRzCoT5cR24djQUwakhJxF/view"),
+    (2021,"BASE","envios","mango","https://drive.google.com/file/d/1k6CxjPufa0YF17e264BI8NYO1rFFZuc7/view"),
+    (2021,"BASE","envios","arandano","https://drive.google.com/file/d/1CyFQu-BdYNxFSoed9SGvKnkimrJjS2Q9/view"),
+    (2021,"BASE","envios","limon","https://drive.google.com/file/d/1--9cfYzrB2giYCy5khZmqXdXL_46Zuz8/view"),
+    (2021,"BASE","envios","palta","https://drive.google.com/file/d/1-BK3uEDMAMrTAdqxMJd-pIYCg0Rp-8kJ/view"),
 
-def load_csv_from_drive(file_id):
+    (2021,"BASE","campo","uva","https://drive.google.com/file/d/1k6OMQxl7B3hVY9OVECc9UlYcytIjpN1A/view"),
+    (2021,"BASE","campo","mango","https://drive.google.com/file/d/1JX50r2NJYG3HjalUTZ5pCHmbD5DXQDUu/view"),
+    (2021,"BASE","campo","arandano","https://drive.google.com/file/d/1HOKP2FaW9UPRYyA7tIj0oSnGzUhkb3h4/view"),
+    (2021,"BASE","campo","limon","https://drive.google.com/file/d/12xOZVXqxvvepb97On1H8feKUoW_u1Qet/view"),
+    (2021,"BASE","campo","palta","https://drive.google.com/file/d/1ckjszJeuyPQS6oVNeWFd-FwoM8FTalHO/view"),
+
+    (2022,"BASE","envios","uva","https://drive.google.com/file/d/1wHxIXmn2stnjdFSnu8spnOSDw9Q45Dti/view"),
+    (2022,"BASE","envios","mango","https://drive.google.com/file/d/1kjtC1QVGe4w3GWEYhMmB9VD98eYjhvPh/view"),
+    (2022,"BASE","envios","arandano","https://drive.google.com/file/d/1tJRlp3FWvYZBr3LFPV1PFke3o6LZcOfa/view"),
+    (2022,"BASE","envios","limon","https://drive.google.com/file/d/1HfO0jh0yPXK99P8mQ080KLEevc4QVnLT/view"),
+    (2022,"BASE","envios","palta","https://drive.google.com/file/d/1IYS7yUDFmeCw3YyCIgKDbayZ63AORHvf/view"),
+
+    (2022,"BASE","campo","uva","https://drive.google.com/file/d/1LS_80bCCgGE4flJ2BEzav1XeQQSrSX1y/view"),
+    (2022,"BASE","campo","mango","https://drive.google.com/file/d/16CDM3zQnH3S5n2SNjqwJmk0oUGkbxtJS/view"),
+    (2022,"BASE","campo","arandano","https://drive.google.com/file/d/1WTkBElLqv3aLQ8s2rkmlQqHM1zsKE33-/view"),
+    (2022,"BASE","campo","limon","https://drive.google.com/file/d/123wwsJLNrvlTxh2VRZQy1JpVOjI9Oj32/view"),
+    (2022,"BASE","campo","palta","https://drive.google.com/file/d/1uIs_MXnilSoPIGhtJtmOCv8N8un2VoFg/view"),
+
+    (2023,"BASE","envios","uva","https://drive.google.com/file/d/1SZjCd3ANa4CF0N0lK_mnOQfzn0-ywTLs/view"),
+    (2023,"BASE","envios","mango","https://drive.google.com/file/d/1S5mMR3nG_DeH3ZpOqAvcjidzPQMW8kw_/view"),
+    (2023,"BASE","envios","arandano","https://drive.google.com/file/d/1JhAhZi3roOQpw5ejm3jnW5Av59De8wc2/view"),
+    (2023,"BASE","envios","limon","https://drive.google.com/file/d/1sGnvph11F431fg5v9c8qzoH-Yxytffti/view"),
+    (2023,"BASE","envios","palta","https://drive.google.com/file/d/1MCaBirErsv3PeJZ4soi2Fszw8QcJbg7w/view"),
+
+    (2023,"BASE","campo","uva","https://drive.google.com/file/d/11sb54WtgNe0poLSR4q-nEGvjMdbnjXiq/view"),
+    (2023,"BASE","campo","mango","https://drive.google.com/file/d/1qV3zoDQNnzeEvQR0eZ0FnrvxdkuruyUM/view"),
+    (2023,"BASE","campo","arandano","https://drive.google.com/file/d/1jdNrMyVcW2HV5PJI63_A_oxl6xLpapl7/view"),
+    (2023,"BASE","campo","limon","https://drive.google.com/file/d/1F708yJNg3mzrdHi53Dmw4RQZkTqUh4YH/view"),
+    (2023,"BASE","campo","palta","https://drive.google.com/file/d/1ZBXYrxS4iJ-lUBPKAMtr4ZIWGf6Wh6ED/view"),
+
+    (2024,"BASE","envios","uva","https://drive.google.com/file/d/1csIY-AT7Uw6QFp49SANyHALHuZO3r65n/view"),
+    (2024,"BASE","envios","mango","https://drive.google.com/file/d/1In6_xnpKZwD1zTG4JrD3uhk7sYNKU4qF/view"),
+    (2024,"BASE","envios","arandano","https://drive.google.com/file/d/1CZSWhLV-STPw9k90cOVzQxJ0V2k7ZTUa/view"),
+    (2024,"BASE","envios","limon","https://drive.google.com/file/d/1XxGB8PGI4yh5K5mO5qGqRnSK_Fe2nPAX/view"),
+    (2024,"BASE","envios","palta","https://drive.google.com/file/d/1mLNGjAunM6HTiCnJIgEoaqZQEuegfSf9/view"),
+
+    (2024,"BASE","campo","uva","https://drive.google.com/file/d/15CoNL-b9tONKTjbj2rIy8cthyeVhsD_F/view"),
+    (2024,"BASE","campo","mango","https://drive.google.com/file/d/1T6OVYHVN6j57Km9Z8zWrKYMlzTUIeRes/view"),
+    (2024,"BASE","campo","arandano","https://drive.google.com/file/d/1YejBbqWi383QjeJntU-AaICQw0TOJyaV/view"),
+    (2024,"BASE","campo","limon","https://drive.google.com/file/d/1JH6oXdDP5z-JAQgu9WvT-ej1pCjnX6WS/view"),
+    (2024,"BASE","campo","palta","https://drive.google.com/file/d/1fxh3QgnZXzjkuqmwG4w9h1YjhK6PPvX9/view"),
+
+    (2025,"BASE","envios","uva","https://drive.google.com/file/d/1iw-OafOHph_epXgf-6kreXhq2GxzNqyN/view"),
+    (2025,"BASE","envios","mango","https://drive.google.com/file/d/1-f5tlde1nBJnl_9BbRJkaDpGBleYtbyG/view"),
+    (2025,"BASE","envios","arandano","https://drive.google.com/file/d/1TxC9TwgFojnNRkQlOI27KJBzG0TK7tp7/view"),
+    (2025,"BASE","envios","limon","https://drive.google.com/file/d/1G8VbTnSeOcJJVDRkze9s12TRts5BvQx6/view"),
+    (2025,"BASE","envios","palta","https://drive.google.com/file/d/1Qt680UXFnKBh7bdV0iGqnJKKmc1suNVA/view"),
+
+    (2025,"BASE","campo","uva","https://drive.google.com/file/d/15R-9ECTNpSQM1FC8tFPUs0emE16H8cHT/view"),
+    (2025,"BASE","campo","mango","https://drive.google.com/file/d/11IziWG98PfqkSyTaK5GvKwU4NEC9LwXJ/view"),
+    (2025,"BASE","campo","arandano","https://drive.google.com/file/d/15w2FG2TT_qPfxEksBgcGbfPu67yNbvYT/view"),
+    (2025,"BASE","campo","limon","https://drive.google.com/file/d/178kHRjqLgs-EFUmzCsNclBKq-nYmVJPO/view"),
+    (2025,"BASE","campo","palta","https://drive.google.com/file/d/1fo9HKY9DSKAjgLVKsx2H0Y7f_YU4DwRT/view"),
+]
+
+# =========================
+# HELPERS
+# =========================
+def extract_id(url):
+    m = re.search(r"/d/([^/]+)", url)
+    return m.group(1) if m else None
+
+DRIVE_MAP = {}
+for y,b,t,p,u in RAW_TABLE:
+    DRIVE_MAP[(y,t,p)] = extract_id(u)
+
+def load_drive_csv(fid):
     try:
-        content = drive_download(file_id)
-        return pd.read_csv(BytesIO(content), sep=",", encoding="utf-8", engine="python")
-    except Exception:
-        try:
-            return pd.read_csv(BytesIO(content), sep=";", encoding="latin1", engine="python")
-        except Exception:
-            return None
-
-# =========================
-# USUARIOS
-# =========================
-def load_users():
-    if not os.path.exists(USERS_FILE):
-        df = pd.DataFrame(columns=[
-            "usuario", "password", "rol",
-            "nombre", "apellido", "dni",
-            "correo", "celular", "empresa", "cargo"
-        ])
-        df.to_csv(USERS_FILE, index=False)
-
-    return pd.read_csv(USERS_FILE)
-
-def save_users(df):
-    df.to_csv(USERS_FILE, index=False)
-
-def ensure_admin():
-    df = load_users()
-    if ADMIN_USER not in df["usuario"].values:
-        admin = pd.DataFrame([{
-            "usuario": ADMIN_USER,
-            "password": ADMIN_PASS,
-            "rol": "admin",
-            "nombre": "Administrador",
-            "apellido": "",
-            "dni": "",
-            "correo": "",
-            "celular": "",
-            "empresa": "Data Core",
-            "cargo": "Admin"
-        }])
-        df = pd.concat([df, admin], ignore_index=True)
-        save_users(df)
-
-# =========================
-# AUTH
-# =========================
-def auth_screen():
-    st.title("🔐 Data Core – Acceso")
-
-    tab1, tab2 = st.tabs(["Ingresar", "Registrarse"])
-
-    with tab1:
-        u = st.text_input("Usuario", key="login_user")
-        p = st.text_input("Contraseña", type="password", key="login_pass")
-        if st.button("Ingresar"):
-            users = load_users()
-            ok = users[(users.usuario == u) & (users.password == p)]
-            if not ok.empty:
-                st.session_state.user = ok.iloc[0].to_dict()
-                st.rerun()
-            else:
-                st.error("Usuario o contraseña incorrectos")
-
-    with tab2:
-        st.subheader("Registro")
-        data = {
-            "usuario": st.text_input("Usuario"),
-            "password": st.text_input("Contraseña", type="password"),
-            "password2": st.text_input("Repetir contraseña", type="password"),
-            "nombre": st.text_input("Nombre"),
-            "apellido": st.text_input("Apellido"),
-            "dni": st.text_input("DNI"),
-            "correo": st.text_input("Correo electrónico"),
-            "celular": st.text_input("Celular"),
-            "empresa": st.text_input("Empresa (opcional)"),
-            "cargo": st.text_input("Cargo (opcional)")
-        }
-
-        if st.button("Registrar"):
-            if data["password"] != data["password2"]:
-                st.error("Las contraseñas no coinciden")
-                return
-
-            users = load_users()
-            if data["usuario"] in users.usuario.values:
-                st.error("Usuario ya existe")
-                return
-
-            new = pd.DataFrame([{
-                "usuario": data["usuario"],
-                "password": data["password"],
-                "rol": "freemium",
-                "nombre": data["nombre"],
-                "apellido": data["apellido"],
-                "dni": data["dni"],
-                "correo": data["correo"],
-                "celular": data["celular"],
-                "empresa": data["empresa"],
-                "cargo": data["cargo"]
-            }])
-
-            users = pd.concat([users, new], ignore_index=True)
-            save_users(users)
-            st.success("Registro exitoso. Ahora puede ingresar.")
+        url = f"https://drive.google.com/uc?id={fid}"
+        r = requests.get(url)
+        r.raise_for_status()
+        return pd.read_csv(BytesIO(r.content))
+    except:
+        return None
 
 # =========================
 # DASHBOARD
 # =========================
-def dashboard():
-    user = st.session_state.user
-    st.markdown(f"## 👋 Bienvenido, {user['nombre'] or user['usuario']}")
+st.title("📊 Data Core – Dashboard")
 
-    colf = st.columns(3)
-    producto = colf[0].selectbox("Producto", ["uva", "mango", "arandano", "limon", "palta"])
-    año = colf[1].selectbox("Año", [2021, 2022, 2023, 2024, 2025])
-    mes = colf[2].selectbox("Mes", ["Todos"] + list(range(1, 13)))
+prod = st.selectbox("Producto", ["uva","mango","arandano","limon","palta"])
+year = st.selectbox("Año", sorted({y for y,_,_,_,_ in RAW_TABLE}))
 
-    col1, col2 = st.columns(2)
+c1, c2 = st.columns(2)
 
-    # ========= ENVIOS =========
-    with col1:
-        st.subheader("📦 Envíos")
-        key = (año, "envios", producto)
-        if key not in DRIVE_MAP:
-            st.info("📌 Información en proceso de mejora.")
-        else:
-            df = load_csv_from_drive(DRIVE_MAP[key])
-            if df is None or df.empty:
-                st.info("📌 Información en proceso de mejora.")
-            else:
-                if user["rol"] != "admin":
-                    df = df.head(3)
-                st.dataframe(df)
-                if user["rol"] != "admin":
-                    st.markdown("🔓 **Acceso completo: escribir a datacore.agrotech@gmail.com**")
+with c1:
+    st.subheader("📦 Envíos")
+    key = (year,"envios",prod)
+    df = load_drive_csv(DRIVE_MAP[key]) if key in DRIVE_MAP else None
+    st.dataframe(df) if df is not None else st.info("Información en proceso de mejora")
 
-    # ========= CAMPO =========
-    with col2:
-        st.subheader("🌾 Campos certificados")
-        key = (año, "campo", producto)
-        if key not in DRIVE_MAP:
-            st.info("📌 Información de campos en proceso de mejora.")
-        else:
-            df = load_csv_from_drive(DRIVE_MAP[key])
-            if df is None or df.empty:
-                st.info("📌 Información de campos en proceso de mejora.")
-            else:
-                if user["rol"] != "admin":
-                    df = df.head(3)
-                st.dataframe(df)
-                if user["rol"] != "admin":
-                    st.markdown("🔓 **Acceso completo: escribir a datacore.agrotech@gmail.com**")
-
-    # ========= ADMIN =========
-    if user["rol"] == "admin":
-        st.divider()
-        st.subheader("🛠 Gestión de usuarios")
-        users = load_users()
-        st.dataframe(users[["usuario", "rol", "correo"]])
-        sel = st.selectbox("Cambiar rol de usuario", users.usuario)
-        new_role = st.selectbox("Nuevo rol", ["freemium", "premium"])
-        if st.button("Actualizar rol"):
-            users.loc[users.usuario == sel, "rol"] = new_role
-            save_users(users)
-            st.success("Rol actualizado")
-
-# =========================
-# MAIN
-# =========================
-ensure_admin()
-
-if "user" not in st.session_state:
-    auth_screen()
-else:
-    dashboard()
+with c2:
+    st.subheader("🌾 Campos certificados")
+    key = (year,"campo",prod)
+    df = load_drive_csv(DRIVE_MAP[key]) if key in DRIVE_MAP else None
+    st.dataframe(df) if df is not None else st.info("Información en proceso de mejora")
