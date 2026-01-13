@@ -7,15 +7,17 @@ import os
 
 st.set_page_config(page_title="Data Core", layout="wide")
 
+# ======================
+# CONFIG
+# ======================
 USERS_FILE = "users.csv"
-INDEX_URL = "PEGA_AQUI_EL_LINK_PUBLICO_DE_TU_drive_index.csv"
-
+INDEX_FILE = "resumen de field.xlsx"  # ← índice LOCAL adjunto
 ADMIN_USER = "DCADMIN"
 ADMIN_PASS = "admindatacore123!"
 
-# =======================
+# ======================
 # SEGURIDAD
-# =======================
+# ======================
 def hash_pwd(pwd):
     return hashlib.sha256(pwd.encode()).hexdigest()
 
@@ -37,9 +39,9 @@ def load_users():
 def save_users(df):
     df.to_csv(USERS_FILE, index=False)
 
-# =======================
+# ======================
 # DRIVE
-# =======================
+# ======================
 def download_drive(url):
     file_id = url.split("/d/")[1].split("/")[0]
     return BytesIO(
@@ -52,41 +54,65 @@ def read_csv_drive(url):
             download_drive(url),
             sep=None,
             engine="python",
-            on_bad_lines="skip"
+            on_bad_lines="skip",
+            low_memory=False
         )
-    except:
+    except Exception:
         return None
 
-def normalize(df):
+def normalize_cols(df):
     df.columns = (
         df.columns.str.lower()
         .str.replace("á","a").str.replace("é","e")
         .str.replace("í","i").str.replace("ó","o")
-        .str.replace("ú","u")
-        .str.replace("ñ","n")
+        .str.replace("ú","u").str.replace("ñ","n")
         .str.strip()
     )
     return df
 
-def norm_mes(x):
-    if pd.isna(x): return None
-    if str(x).isdigit(): return int(x)
+def norm_mes(val):
+    if pd.isna(val):
+        return None
+    if str(val).isdigit():
+        return int(val)
     meses = {
         "ene":1,"feb":2,"mar":3,"abr":4,"may":5,"jun":6,
         "jul":7,"ago":8,"sep":9,"oct":10,"nov":11,"dic":12
     }
-    return meses.get(str(x).lower()[:3])
+    return meses.get(str(val).lower()[:3])
 
-# =======================
-# ÍNDICE CENTRAL
-# =======================
+# ======================
+# ÍNDICE LOCAL (EXCEL)
+# ======================
 @st.cache_data
 def load_index():
-    return read_csv_drive(INDEX_URL)
+    if not os.path.exists(INDEX_FILE):
+        return None
+    idx = pd.read_excel(INDEX_FILE)
+    idx = normalize_cols(idx)
 
-# =======================
+    # normalizar nombres esperados
+    rename_map = {}
+    for c in idx.columns:
+        if "ano" in c:
+            rename_map[c] = "anio"
+        if c in ["field id", "field_id", "url", "link"]:
+            rename_map[c] = "url"
+        if "producto" in c:
+            rename_map[c] = "producto"
+        if "tipo" in c:
+            rename_map[c] = "tipo"
+    idx = idx.rename(columns=rename_map)
+
+    # normalizar valores
+    idx["producto"] = idx["producto"].str.lower().str.strip()
+    idx["tipo"] = idx["tipo"].str.lower().str.strip()
+
+    return idx[["anio","tipo","producto","url"]]
+
+# ======================
 # AUTH
-# =======================
+# ======================
 def auth():
     st.title("🔐 Data Core – Acceso")
     t1, t2 = st.tabs(["Ingresar","Registrarse"])
@@ -127,18 +153,16 @@ def auth():
                 save_users(users)
                 st.success("Registro exitoso")
 
-# =======================
+# ======================
 # DASHBOARD
-# =======================
+# ======================
 def dashboard():
     st.markdown(f"👋 **Bienvenido, {st.session_state.user}**")
 
     idx = load_index()
-    if idx is None:
+    if idx is None or idx.empty:
         st.error("No se pudo cargar el índice de datos")
         return
-
-    idx = normalize(idx)
 
     productos = sorted(idx.producto.unique())
     anios = sorted(idx.anio.unique())
@@ -148,13 +172,13 @@ def dashboard():
     anio = f2.selectbox("Año", anios)
     mes = f3.selectbox("Mes", ["Todos"] + list(range(1,13)))
 
-    for tipo,titulo in [("envios","📦 Envíos"),("campo","🌾 Campos certificados")]:
+    for tipo, titulo in [("envios","📦 Envíos"),("campo","🌾 Campos certificados")]:
         st.subheader(titulo)
 
         fila = idx[
-            (idx.tipo==tipo) &
-            (idx.producto==producto) &
-            (idx.anio==anio)
+            (idx.tipo == tipo) &
+            (idx.producto == producto) &
+            (idx.anio == anio)
         ]
 
         if fila.empty:
@@ -166,14 +190,15 @@ def dashboard():
             st.error("Error cargando data")
             continue
 
-        df = normalize(df)
+        df = normalize_cols(df)
 
-        mcol = next((c for c in df.columns if "mes" in c), None)
-        if mcol:
-            df["mes_norm"] = df[mcol].apply(norm_mes)
+        mes_col = next((c for c in df.columns if "mes" in c), None)
+        if mes_col:
+            df["mes_norm"] = df[mes_col].apply(norm_mes)
             if mes != "Todos":
                 df = df[df.mes_norm == mes]
 
+        # 🔒 LÍMITE SOLO PARA FREEMIUM
         if st.session_state.rol != "admin":
             df = df.head(3)
 
@@ -182,6 +207,7 @@ def dashboard():
         if st.session_state.rol != "admin":
             st.markdown("🔓 [Adquirir acceso premium](mailto:datacore.agrotech@gmail.com)")
 
+    # ===== ADMIN =====
     if st.session_state.rol == "admin":
         st.divider()
         st.subheader("🛠 Gestión de usuarios")
@@ -191,16 +217,15 @@ def dashboard():
                 c1,c2 = st.columns([3,2])
                 c1.write(r.usuario)
                 users.loc[i,"rol"] = c2.selectbox(
-                    "Rol",
-                    ["freemium","premium"],
+                    "Rol", ["freemium","premium"],
                     index=0 if r.rol=="freemium" else 1,
                     key=f"rol_{i}"
                 )
         save_users(users)
 
-# =======================
+# ======================
 # MAIN
-# =======================
+# ======================
 init_users()
 if "user" not in st.session_state:
     auth()
