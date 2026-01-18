@@ -169,7 +169,7 @@ if "logged" not in st.session_state:
 # AUTH + REGISTRO
 # =====================================================
 def auth():
-    st.title("🔐 Data Core – Acceso")
+    st.title("🔐 Agro Data Core – Acceso")
     t1,t2=st.tabs(["Ingresar","Registrarse"])
 
     with t1:
@@ -203,7 +203,7 @@ def auth():
 # DASHBOARD
 # =====================================================
 def dashboard():
-    st.markdown(f"👋 **Bienvenido, {st.session_state.user}**")
+    st.markdown(f"👋 **Bienvenido a la base de datos más completa del sector, {st.session_state.user}**")
     if st.button("Cerrar sesión"):
         st.session_state.logged=False
         st.rerun()
