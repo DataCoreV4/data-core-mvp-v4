@@ -56,6 +56,10 @@ DRIVE_MAP = {
             "arandano": "https://drive.google.com/file/d/1TxC9TwgFojnNRkQlOI27KJBzG0TK7tp7/view",
             "limon": "https://drive.google.com/file/d/1G8VbTnSeOcJJVDRkze9s12TRts5BvQx6/view",
             "palta": "https://drive.google.com/file/d/1Qt680UXFnKBh7bdV0iGqnJKKmc1suNVA/view",
+         },
+        2026: {
+            "mango": "https://drive.google.com/file/d/1ccxJWlT3m09Un6_qgfmgFDL-1BOyfzFg/view",
+            "uva": "https://drive.google.com/file/d/11VQjgJUFU7wNJ-3b3hn93AXqVRq-SvkY/view",  
         },
     },
     "campo": {
